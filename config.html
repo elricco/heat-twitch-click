@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Heat Cluster Overlay — Konfiguration</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #181b22;
+      --panel-2: #1f232c;
+      --line: #2a2f3a;
+      --text: #e7eaf0;
+      --muted: #9aa3b2;
+      --accent: #ff7a3c;
+      --accent-2: #ff5a28;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      display: grid; grid-template-columns: 380px 1fr; gap: 0;
+    }
+    @media (max-width: 860px) { body { grid-template-columns: 1fr; } }
+
+    .panel {
+      padding: 24px; border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; gap: 18px;
+      min-height: 100vh; background: var(--panel);
+    }
+    h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+    .sub { color: var(--muted); font-size: 12.5px; margin-top: -10px; }
+
+    fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 14px 14px 4px; margin: 0; }
+    legend { padding: 0 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+
+    .field { margin-bottom: 12px; }
+    label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 5px; }
+    .hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+    input[type="text"], input[type="number"] {
+      width: 100%; padding: 9px 10px; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+      font: inherit; outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    .row { display: flex; gap: 10px; }
+    .row > .field { flex: 1; }
+
+    .check { display: flex; align-items: center; gap: 9px; }
+    .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+    .check label { margin: 0; color: var(--text); font-size: 13.5px; }
+
+    .urlbox {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+    .urlbox input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    button {
+      border: none; border-radius: 8px; padding: 10px 14px; font: inherit; font-weight: 600;
+      cursor: pointer; background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      color: #1a0d06; white-space: nowrap;
+    }
+    button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+    button:active { transform: translateY(1px); }
+
+    /* Vorschau */
+    .preview { padding: 24px; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
+    .preview-head { display: flex; align-items: center; justify-content: space-between; }
+    .preview-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+    .stage {
+      flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+      /* Karo-Muster macht Transparenz sichtbar */
+      background-color: #20242c;
+      background-image:
+        linear-gradient(45deg, #262b34 25%, transparent 25%),
+        linear-gradient(-45deg, #262b34 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #262b34 75%),
+        linear-gradient(-45deg, transparent 75%, #262b34 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+      position: relative;
+    }
+    .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .note { color: var(--muted); font-size: 12px; }
+    code { background: var(--panel-2); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <form class="panel" id="form">
+    <div>
+      <h1>Heat Cluster Overlay</h1>
+      <div class="sub">Einstellungen → fertige OBS-Browser-Source-URL</div>
+    </div>
+
+    <fieldset>
+      <legend>Quelle</legend>
+      <div class="field">
+        <label for="channel">Twitch-Channel-ID (numerisch)</label>
+        <input type="text" id="channel" inputmode="numeric" placeholder="z. B. 97032862">
+        <div class="hint">Leer lassen oder „Sim-Modus" aktivieren, um ohne Stream zu testen.</div>
+      </div>
+      <div class="field check">
+        <input type="checkbox" id="sim">
+        <label for="sim">Sim-Modus (Testklicks statt Live-Heat)</label>
+      </div>
+      <div class="field">
+        <label for="autoclicks">Auto-Klicks pro Sekunde (nur Sim)</label>
+        <input type="number" id="autoclicks" min="0" max="200" step="1" value="0">
+        <div class="hint">0 = nur echte Mausklicks ins Bild. ~30 ergibt eine lebhafte Demo.</div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Cluster &amp; Kreise</legend>
+      <div class="row">
+        <div class="field">
+          <label for="window">Zeitfenster (Sek.)</label>
+          <input type="number" id="window" min="1" max="120" step="1" value="12">
+        </div>
+        <div class="field">
+          <label for="threshold">Threshold (%)</label>
+          <input type="number" id="threshold" min="0" max="100" step="1" value="10">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="maxCircles">Max. Kreise</label>
+          <input type="number" id="maxCircles" min="1" max="10" step="1" value="5">
+        </div>
+        <div class="field">
+          <label for="mergeRadius">Merge-Radius (% Breite)</label>
+          <input type="number" id="mergeRadius" min="1" max="50" step="1" value="8">
+        </div>
+      </div>
+      <div class="field check">
+        <input type="checkbox" id="status">
+        <label for="status">Status-Badge im Overlay anzeigen</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>OBS-URL</legend>
+      <div class="urlbox">
+        <input type="text" id="obsUrl" readonly>
+        <button type="button" id="copyBtn">Kopieren</button>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        In OBS: <code>+</code> → <em>Browser</em> → diese URL einfügen, Breite/Höhe = Stream-Auflösung
+        (z. B. 1920×1080), „Hintergrund transparent" lassen.
+      </div>
+      <div class="field" style="margin-top:10px">
+        <button type="button" class="secondary" id="openBtn">Overlay in neuem Tab öffnen</button>
+      </div>
+    </fieldset>
+  </form>
+
+  <div class="preview">
+    <div class="preview-head">
+      <span class="preview-title">Live-Vorschau</span>
+      <span class="note">Karo = transparent. Klicke ins Bild, um Testklicks zu setzen.</span>
+    </div>
+    <div class="stage"><iframe id="preview" title="Overlay-Vorschau"></iframe></div>
+  </div>
+
+  <script>
+    const STORE_KEY = 'heat-overlay-config';
+    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status'];
+    const el = (id) => document.getElementById(id);
+
+    function readForm() {
+      return {
+        channel: el('channel').value.trim(),
+        sim: el('sim').checked,
+        autoclicks: el('autoclicks').value,
+        window: el('window').value,
+        threshold: el('threshold').value,
+        maxCircles: el('maxCircles').value,
+        mergeRadius: el('mergeRadius').value,
+        status: el('status').checked,
+      };
+    }
+
+    function writeForm(v) {
+      if (!v) return;
+      el('channel').value = v.channel || '';
+      el('sim').checked = !!v.sim;
+      el('autoclicks').value = v.autoclicks ?? 0;
+      el('window').value = v.window ?? 12;
+      el('threshold').value = v.threshold ?? 10;
+      el('maxCircles').value = v.maxCircles ?? 5;
+      el('mergeRadius').value = v.mergeRadius ?? 8;
+      el('status').checked = !!v.status;
+    }
+
+    // Baut die Query-Parameter; `forStatus` erzwingt das Status-Badge in der Vorschau.
+    function buildParams(v, forceStatus) {
+      const p = new URLSearchParams();
+      if (v.channel) p.set('channel', v.channel);
+      if (v.sim) p.set('sim', '1');
+      if (Number(v.autoclicks) > 0) p.set('autoclicks', v.autoclicks);
+      p.set('window', v.window);
+      p.set('threshold', v.threshold);
+      p.set('maxCircles', v.maxCircles);
+      p.set('mergeRadius', v.mergeRadius);
+      if (forceStatus || v.status) p.set('status', '1');
+      return p.toString();
+    }
+
+    function overlayBase() {
+      return new URL('overlay.html', location.href).href;
+    }
+
+    function update() {
+      const v = readForm();
+      localStorage.setItem(STORE_KEY, JSON.stringify(v));
+
+      const obsUrl = overlayBase() + '?' + buildParams(v, false);
+      el('obsUrl').value = obsUrl;
+
+      // Vorschau: Status erzwingen, damit man Modus/Verbindung sieht.
+      const previewUrl = overlayBase() + '?' + buildParams(v, true);
+      const iframe = el('preview');
+      if (iframe.src !== previewUrl) iframe.src = previewUrl;
+    }
+
+    // Events
+    fields.forEach((id) => {
+      el(id).addEventListener('input', update);
+      el(id).addEventListener('change', update);
+    });
+
+    el('copyBtn').addEventListener('click', async () => {
+      const url = el('obsUrl').value;
+      try {
+        await navigator.clipboard.writeText(url);
+        el('copyBtn').textContent = 'Kopiert ✓';
+      } catch (e) {
+        el('obsUrl').select();
+        document.execCommand && document.execCommand('copy');
+        el('copyBtn').textContent = 'Kopiert ✓';
+      }
+      setTimeout(() => (el('copyBtn').textContent = 'Kopieren'), 1400);
+    });
+
+    el('openBtn').addEventListener('click', () => window.open(el('obsUrl').value, '_blank'));
+
+    // Init: gespeicherte Werte laden, dann Vorschau bauen.
+    try { writeForm(JSON.parse(localStorage.getItem(STORE_KEY))); } catch (e) { /* noop */ }
+    update();
+  </script>
+</body>
+</html>
