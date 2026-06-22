@@ -7,7 +7,7 @@ eines gleitenden Zeitfensters. Ein Kreis erscheint erst ab einem Mindestanteil (
 
 Reiner Proof of Concept: nur Visualisierung — kein Backend, keine Dependencies, kein Build.
 
-![Stil: Ring + Prozent-Label, Cluster wandern weich mit der Crowd]
+![Config-Seite mit Live-Vorschau: Klick-Hotspots als Kreise mit ihrem prozentualen Anteil](images/heat-twitch-click.png)
 
 ## Schnellstart
 
