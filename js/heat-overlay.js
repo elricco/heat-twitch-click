@@ -27,6 +27,8 @@
       maxCircles: Math.max(1, Math.round(num('maxCircles', 5))),
       mergeRadius: Math.max(0.01, num('mergeRadius', 8)) / 100, // Anteil der Breite
       status: p.get('status') === '1',
+      mode: p.get('mode') === 'zones' ? 'zones' : 'cluster',
+      zones: parseZones(p.get('zones')),
     };
   }
 
@@ -229,6 +231,40 @@
     ctx.restore();
   }
 
+  // ---- ZoneRenderer: fixe Kreise an Zonen-Schwerpunkten -------------------
+  function createZoneRenderer(canvas) {
+    const ctx = canvas.getContext('2d');
+    let visuals = []; // index-gleich zu den Zonen: {x,y, share,tshare, op}
+    const MOVE = 0.18; // Anteil-Lerp
+    const FADE = 0.08; // Opacity-Lerp
+
+    function track(zones) {
+      for (let i = 0; i < zones.length; i++) {
+        const z = zones[i];
+        if (!visuals[i]) visuals[i] = { x: z.x, y: z.y, share: z.share, tshare: z.share, op: 0 };
+        visuals[i].x = z.x; // Position ist fix (Schwerpunkt)
+        visuals[i].y = z.y;
+        visuals[i].tshare = z.share;
+      }
+      visuals.length = zones.length; // entfernte Zonen fallen weg
+    }
+
+    function draw() {
+      const W = canvas.width;
+      const H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      for (const v of visuals) {
+        v.share += (v.tshare - v.share) * MOVE;
+        v.op += (1 - v.op) * FADE;
+      }
+      // Größte zuletzt zeichnen, damit sie oben liegt.
+      const ordered = visuals.slice().sort((a, b) => a.share - b.share);
+      for (const v of ordered) drawCircle(ctx, v, W, H);
+    }
+
+    return { track, draw };
+  }
+
   // ---- Canvas an Device-Pixel anpassen -------------------------------------
   function setupCanvas(canvas) {
     function resize() {
@@ -304,15 +340,26 @@
       HeatSource(cfg.channel, onClick, log);
     }
 
-    const renderer = createRenderer(canvas);
-    function frame() {
-      const clicks = buffer.current();
-      const clusters = cluster(clicks, cfg.mergeRadius, cfg.maxCircles, cfg.threshold);
-      renderer.track(clusters);
-      renderer.draw();
+    if (cfg.mode === 'zones') {
+      const zoneRenderer = createZoneRenderer(canvas);
+      const zoneFrame = () => {
+        const clicks = buffer.current();
+        zoneRenderer.track(tallyZones(clicks, cfg.zones));
+        zoneRenderer.draw();
+        requestAnimationFrame(zoneFrame);
+      };
+      requestAnimationFrame(zoneFrame);
+    } else {
+      const renderer = createRenderer(canvas);
+      const frame = () => {
+        const clicks = buffer.current();
+        const clusters = cluster(clicks, cfg.mergeRadius, cfg.maxCircles, cfg.threshold);
+        renderer.track(clusters);
+        renderer.draw();
+        requestAnimationFrame(frame);
+      };
       requestAnimationFrame(frame);
     }
-    requestAnimationFrame(frame);
   }
 
   if (typeof window !== 'undefined') window.HeatOverlay = { init };
