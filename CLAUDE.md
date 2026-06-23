@@ -61,6 +61,7 @@ Die vier Bausteine in `js/heat-overlay.js` sind bewusst entkoppelt:
 | `status`     | `0`     | `1` zeigt ein kleines Status-Badge (Verbindung/Modus). |
 | `mode`       | `cluster` | `zones` aktiviert feste Zonen statt Auto-Cluster. |
 | `zones`      | —       | Feste Vierecke `x1,y1,…,x4,y4`, Zonen per `;` getrennt (nur `mode=zones`). |
+| `grow`       | `1`     | `0` = feste Kreisgröße (nur Prozentzahl), Kreise wachsen nicht mit dem Anteil. |
 
 `config.html` generiert diese URL und merkt die zuletzt genutzten Werte in `localStorage`.
 

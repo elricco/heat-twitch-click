@@ -162,6 +162,10 @@
         <input type="checkbox" id="status">
         <label for="status">Status-Badge im Overlay anzeigen</label>
       </div>
+      <div class="field check">
+        <input type="checkbox" id="grow" checked>
+        <label for="grow">Kreise wachsen mit Anteil (sonst feste Größe, nur %)</label>
+      </div>
     </fieldset>
 
     <fieldset id="zonesFs">
@@ -209,7 +213,7 @@
 
   <script>
     const STORE_KEY = 'heat-overlay-config';
-    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status', 'mode'];
+    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status', 'mode', 'grow'];
     const round4 = (v) => Math.round(v * 1e4) / 1e4;
     let state = { zones: [] }; // zones: [{ points: [{x,y}, ...] }]  (0..4 Punkte)
     let editingIndex = null;   // von Task 6 genutzt
@@ -331,6 +335,7 @@
         mergeRadius: el('mergeRadius').value,
         status: el('status').checked,
         mode: el('mode').value,
+        grow: el('grow').checked,
       };
     }
 
@@ -345,6 +350,7 @@
       el('mergeRadius').value = v.mergeRadius ?? 8;
       el('status').checked = !!v.status;
       el('mode').value = v.mode || 'cluster';
+      el('grow').checked = v.grow !== false; // Default: an
     }
 
     // Baut die Query-Parameter; `forStatus` erzwingt das Status-Badge in der Vorschau.
@@ -358,6 +364,7 @@
       p.set('maxCircles', v.maxCircles);
       p.set('mergeRadius', v.mergeRadius);
       if (forceStatus || v.status) p.set('status', '1');
+      if (v.grow === false) p.set('grow', '0');
       if (v.mode === 'zones') {
         p.set('mode', 'zones');
         const z = encodeZones(state.zones);

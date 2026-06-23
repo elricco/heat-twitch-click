@@ -29,6 +29,7 @@
       status: p.get('status') === '1',
       mode: p.get('mode') === 'zones' ? 'zones' : 'cluster',
       zones: parseZones(p.get('zones')),
+      grow: p.get('grow') !== '0', // false = feste Kreisgröße, nur Prozentzahl
     };
   }
 
@@ -143,7 +144,7 @@
   }
 
   // ---- Renderer: Canvas, weiche Übergänge ----------------------------------
-  function createRenderer(canvas) {
+  function createRenderer(canvas, grow) {
     const ctx = canvas.getContext('2d');
     let visuals = []; // {x,y, tx,ty, share,tshare, op,top}
     const MOVE = 0.18; // Position/Anteil-Lerp
@@ -192,15 +193,19 @@
 
       // Größte zuletzt zeichnen, damit sie oben liegen.
       const ordered = visuals.slice().sort((a, b) => a.share - b.share);
-      for (const v of ordered) drawCircle(ctx, v, W, H);
+      for (const v of ordered) drawCircle(ctx, v, W, H, grow);
     }
 
     return { track, draw };
   }
 
-  function drawCircle(ctx, v, W, H) {
+  function drawCircle(ctx, v, W, H, grow) {
     const minDim = Math.min(W, H);
-    const radius = minDim * (0.06 + v.share * 0.20);
+    // grow !== false: Radius wächst mit dem Anteil (deutlich flacher als früher).
+    // grow === false: feste Kreisgröße, es zählt nur die Prozentzahl.
+    const radius = grow === false
+      ? minDim * 0.085
+      : minDim * (0.045 + v.share * 0.09);
     const x = v.x * W;
     const y = v.y * H;
     const pct = Math.round(v.share * 100);
@@ -232,7 +237,7 @@
   }
 
   // ---- ZoneRenderer: fixe Kreise an Zonen-Schwerpunkten -------------------
-  function createZoneRenderer(canvas) {
+  function createZoneRenderer(canvas, grow) {
     const ctx = canvas.getContext('2d');
     let visuals = []; // index-gleich zu den Zonen: {x,y, share,tshare, op}
     const MOVE = 0.18; // Anteil-Lerp
@@ -259,7 +264,7 @@
       }
       // Größte zuletzt zeichnen, damit sie oben liegt.
       const ordered = visuals.slice().sort((a, b) => a.share - b.share);
-      for (const v of ordered) drawCircle(ctx, v, W, H);
+      for (const v of ordered) drawCircle(ctx, v, W, H, grow);
     }
 
     return { track, draw };
@@ -341,7 +346,7 @@
     }
 
     if (cfg.mode === 'zones') {
-      const zoneRenderer = createZoneRenderer(canvas);
+      const zoneRenderer = createZoneRenderer(canvas, cfg.grow);
       const zoneFrame = () => {
         const clicks = buffer.current();
         zoneRenderer.track(tallyZones(clicks, cfg.zones));
@@ -350,7 +355,7 @@
       };
       requestAnimationFrame(zoneFrame);
     } else {
-      const renderer = createRenderer(canvas);
+      const renderer = createRenderer(canvas, cfg.grow);
       const frame = () => {
         const clicks = buffer.current();
         const clusters = cluster(clicks, cfg.mergeRadius, cfg.maxCircles, cfg.threshold);
