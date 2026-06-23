@@ -62,6 +62,13 @@
     button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); font-weight: 500; }
     button:active { transform: translateY(1px); }
 
+    .zone-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+    .zone-row:last-of-type { border-bottom: 0; }
+    .zone-row .name { flex: 1; font-size: 13px; }
+    .zone-row .state { font-size: 11.5px; color: var(--muted); }
+    .zone-row button { padding: 6px 10px; font-size: 12px; }
+    .zone-row.editing { outline: 1px solid var(--accent); border-radius: 6px; }
+
     /* Vorschau */
     .preview { padding: 24px; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
     .preview-head { display: flex; align-items: center; justify-content: space-between; }
@@ -90,6 +97,18 @@
       <h1>Heat Cluster Overlay</h1>
       <div class="sub">Einstellungen → fertige OBS-Browser-Source-URL</div>
     </div>
+
+    <fieldset>
+      <legend>Modus</legend>
+      <div class="field">
+        <label for="mode">Overlay-Modus</label>
+        <select id="mode">
+          <option value="cluster">Cluster (automatische Hotspots)</option>
+          <option value="zones">Zonen (feste Vierecke)</option>
+        </select>
+        <div class="hint">„Zonen" misst Klick-Anteile in selbst platzierten Bereichen.</div>
+      </div>
+    </fieldset>
 
     <fieldset>
       <legend>Quelle</legend>
@@ -137,6 +156,15 @@
       </div>
     </fieldset>
 
+    <fieldset id="zonesFs">
+      <legend>Zonen</legend>
+      <div id="zoneList"></div>
+      <button type="button" class="secondary" id="addZoneBtn">+ Zone hinzufügen</button>
+      <div class="hint" style="margin-top:8px">
+        „Editieren" → 4 Punkte in der Vorschau anklicken. Reihenfolge im Uhrzeigersinn empfohlen.
+      </div>
+    </fieldset>
+
     <fieldset>
       <legend>OBS-URL</legend>
       <div class="urlbox">
@@ -163,8 +191,52 @@
 
   <script>
     const STORE_KEY = 'heat-overlay-config';
-    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status'];
+    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status', 'mode'];
+    const round4 = (v) => Math.round(v * 1e4) / 1e4;
+    let state = { zones: [] }; // zones: [{ points: [{x,y}, ...] }]  (0..4 Punkte)
+    let editingIndex = null;   // von Task 6 genutzt
+
+    function encodeZones(zones) {
+      return zones
+        .filter((z) => z.points.length === 4)
+        .map((z) => z.points.map((p) => round4(p.x) + ',' + round4(p.y)).join(','))
+        .join(';');
+    }
+
+    function renderZoneList() {
+      const list = el('zoneList');
+      list.innerHTML = '';
+      state.zones.forEach((z, i) => {
+        const row = document.createElement('div');
+        row.className = 'zone-row' + (editingIndex === i ? ' editing' : '');
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = 'Zone ' + (i + 1);
+        const st = document.createElement('span');
+        st.className = 'state';
+        st.textContent = z.points.length + '/4';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'secondary';
+        edit.textContent = editingIndex === i ? 'Klicke 4 Punkte …' : 'Editieren';
+        edit.addEventListener('click', () => startEdit(i));
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'secondary';
+        del.textContent = 'Löschen';
+        del.addEventListener('click', () => {
+          state.zones.splice(i, 1);
+          if (editingIndex === i) editingIndex = null;
+          renderZoneList();
+          update();
+        });
+        row.append(name, st, edit, del);
+        list.appendChild(row);
+      });
+    }
     const el = (id) => document.getElementById(id);
+
+    function startEdit(i) { editingIndex = i; renderZoneList(); }
 
     function readForm() {
       return {
@@ -176,6 +248,7 @@
         maxCircles: el('maxCircles').value,
         mergeRadius: el('mergeRadius').value,
         status: el('status').checked,
+        mode: el('mode').value,
       };
     }
 
@@ -189,6 +262,7 @@
       el('maxCircles').value = v.maxCircles ?? 5;
       el('mergeRadius').value = v.mergeRadius ?? 8;
       el('status').checked = !!v.status;
+      el('mode').value = v.mode || 'cluster';
     }
 
     // Baut die Query-Parameter; `forStatus` erzwingt das Status-Badge in der Vorschau.
@@ -202,6 +276,11 @@
       p.set('maxCircles', v.maxCircles);
       p.set('mergeRadius', v.mergeRadius);
       if (forceStatus || v.status) p.set('status', '1');
+      if (v.mode === 'zones') {
+        p.set('mode', 'zones');
+        const z = encodeZones(state.zones);
+        if (z) p.set('zones', z);
+      }
       return p.toString();
     }
 
@@ -211,7 +290,8 @@
 
     function update() {
       const v = readForm();
-      localStorage.setItem(STORE_KEY, JSON.stringify(v));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ ...v, zones: state.zones }));
+      applyModeVisibility();
 
       const obsUrl = overlayBase() + '?' + buildParams(v, false);
       el('obsUrl').value = obsUrl;
@@ -227,6 +307,16 @@
       el(id).addEventListener('input', update);
       el(id).addEventListener('change', update);
     });
+
+    el('addZoneBtn').addEventListener('click', () => {
+      state.zones.push({ points: [] });
+      renderZoneList();
+      update();
+    });
+
+    function applyModeVisibility() {
+      el('zonesFs').style.display = el('mode').value === 'zones' ? '' : 'none';
+    }
 
     el('copyBtn').addEventListener('click', async () => {
       const url = el('obsUrl').value;
@@ -244,7 +334,14 @@
     el('openBtn').addEventListener('click', () => window.open(el('obsUrl').value, '_blank'));
 
     // Init: gespeicherte Werte laden, dann Vorschau bauen.
-    try { writeForm(JSON.parse(localStorage.getItem(STORE_KEY))); } catch (e) { /* noop */ }
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (saved) {
+        writeForm(saved);
+        if (Array.isArray(saved.zones)) state.zones = saved.zones;
+      }
+    } catch (e) { /* noop */ }
+    renderZoneList();
     update();
   </script>
 </body>
