@@ -18,7 +18,8 @@ Reiner Proof of Concept: nur Visualisierung — kein Backend, keine Dependencies
 4. In **OBS**: `+` → *Browser* → URL einfügen, Breite/Höhe = Stream-Auflösung (z. B. 1920×1080),
    Hintergrund transparent lassen.
 
-> Die Heat Extension muss vom Kanalinhaber im Twitch-Dashboard aktiviert sein, damit echte
+> Die [Heat Twitch Extension](https://dashboard.twitch.tv/extensions/cr20njfkgll4okyrhag7xxph270sqk)
+> muss vom Kanalinhaber im Twitch-Dashboard installiert und aktiviert sein, damit echte
 > Klicks ankommen.
 
 ## Dateien
