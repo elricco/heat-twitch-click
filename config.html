@@ -62,12 +62,19 @@
     button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); font-weight: 500; }
     button:active { transform: translateY(1px); }
 
+    .zone-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+    .zone-row:last-of-type { border-bottom: 0; }
+    .zone-row .name { flex: 1; font-size: 13px; }
+    .zone-row .state { font-size: 11.5px; color: var(--muted); }
+    .zone-row button { padding: 6px 10px; font-size: 12px; }
+    .zone-row.editing { outline: 1px solid var(--accent); border-radius: 6px; }
+
     /* Vorschau */
     .preview { padding: 24px; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
     .preview-head { display: flex; align-items: center; justify-content: space-between; }
     .preview-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
     .stage {
-      flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+      width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
       /* Karo-Muster macht Transparenz sichtbar */
       background-color: #20242c;
       background-image:
@@ -79,7 +86,15 @@
       background-position: 0 0, 0 12px, 12px -12px, -12px 0;
       position: relative;
     }
-    .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    /* Schichten in der Stage (unten → oben): Referenzbild · Vorschau (Kreise) · Zonen-Umrisse */
+    .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 2; }
+    .editor-bg, .editor-layer { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+    .editor-bg { object-fit: fill; z-index: 1; }                /* Referenzbild: hinter der Vorschau */
+    .editor-layer { z-index: 3; pointer-events: none; }         /* Zonen-Umrisse: über der Vorschau */
+    body.zones-mode .editor-layer { display: block; }           /* im Zonen-Modus immer sichtbar */
+    body.editing .editor-layer { pointer-events: auto; cursor: crosshair; } /* nur beim Editieren klickbar */
+    .editor-toolbar { display: flex; gap: 8px; align-items: center; }
+    .editor-toolbar .note { flex: 1; }
     .note { color: var(--muted); font-size: 12px; }
     code { background: var(--panel-2); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
   </style>
@@ -90,6 +105,18 @@
       <h1>Heat Cluster Overlay</h1>
       <div class="sub">Einstellungen → fertige OBS-Browser-Source-URL</div>
     </div>
+
+    <fieldset>
+      <legend>Modus</legend>
+      <div class="field">
+        <label for="mode">Overlay-Modus</label>
+        <select id="mode">
+          <option value="cluster">Cluster (automatische Hotspots)</option>
+          <option value="zones">Zonen (feste Vierecke)</option>
+        </select>
+        <div class="hint">„Zonen" misst Klick-Anteile in selbst platzierten Bereichen.</div>
+      </div>
+    </fieldset>
 
     <fieldset>
       <legend>Quelle</legend>
@@ -135,6 +162,19 @@
         <input type="checkbox" id="status">
         <label for="status">Status-Badge im Overlay anzeigen</label>
       </div>
+      <div class="field check">
+        <input type="checkbox" id="grow" checked>
+        <label for="grow">Kreise wachsen mit Anteil (sonst feste Größe, nur %)</label>
+      </div>
+    </fieldset>
+
+    <fieldset id="zonesFs">
+      <legend>Zonen</legend>
+      <div id="zoneList"></div>
+      <button type="button" class="secondary" id="addZoneBtn">+ Zone hinzufügen</button>
+      <div class="hint" style="margin-top:8px">
+        „Editieren" → 4 Punkte in der Vorschau anklicken. Reihenfolge im Uhrzeigersinn empfohlen.
+      </div>
     </fieldset>
 
     <fieldset>
@@ -158,13 +198,131 @@
       <span class="preview-title">Live-Vorschau</span>
       <span class="note">Karo = transparent. Klicke ins Bild, um Testklicks zu setzen.</span>
     </div>
-    <div class="stage"><iframe id="preview" title="Overlay-Vorschau"></iframe></div>
+    <div class="stage">
+      <iframe id="preview" title="Overlay-Vorschau"></iframe>
+      <img id="refImage" class="editor-bg" alt="">
+      <canvas id="editor" class="editor-layer"></canvas>
+    </div>
+    <div class="editor-toolbar" id="editorToolbar">
+      <span class="note" id="editorHint">Im Zonen-Modus „Editieren" wählen, dann 4 Punkte klicken.</span>
+      <button type="button" class="secondary" id="refBtn">Referenzbild laden</button>
+      <button type="button" class="secondary" id="refClearBtn" style="display:none">Referenzbild entfernen</button>
+      <input type="file" id="refInput" accept="image/*" style="display:none">
+    </div>
   </div>
 
   <script>
     const STORE_KEY = 'heat-overlay-config';
-    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status'];
+    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status', 'mode', 'grow'];
+    const round4 = (v) => Math.round(v * 1e4) / 1e4;
+    let state = { zones: [] }; // zones: [{ points: [{x,y}, ...] }]  (0..4 Punkte)
+    let editingIndex = null;   // von Task 6 genutzt
+
+    function encodeZones(zones) {
+      return zones
+        .filter((z) => z.points.length === 4)
+        .map((z) => z.points.map((p) => round4(p.x) + ',' + round4(p.y)).join(','))
+        .join(';');
+    }
+
     const el = (id) => document.getElementById(id);
+
+    function renderZoneList() {
+      const list = el('zoneList');
+      list.innerHTML = '';
+      state.zones.forEach((z, i) => {
+        const row = document.createElement('div');
+        row.className = 'zone-row' + (editingIndex === i ? ' editing' : '');
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = 'Zone ' + (i + 1);
+        const st = document.createElement('span');
+        st.className = 'state';
+        st.textContent = z.points.length + '/4';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'secondary';
+        edit.textContent = editingIndex === i ? 'Klicke 4 Punkte …' : 'Editieren';
+        edit.addEventListener('click', () => startEdit(i));
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'secondary';
+        del.textContent = 'Löschen';
+        del.addEventListener('click', () => {
+          state.zones.splice(i, 1);
+          if (editingIndex === i) { editingIndex = null; document.body.classList.remove('editing'); }
+          else if (editingIndex !== null && i < editingIndex) editingIndex--;
+          renderZoneList();
+          update();
+        });
+        row.append(name, st, edit, del);
+        list.appendChild(row);
+      });
+    }
+    const editor = el('editor');
+    const ectx = editor.getContext('2d');
+
+    function startEdit(i) {
+      editingIndex = i;
+      state.zones[i].points = [];
+      document.body.classList.add('editing');
+      sizeEditor();
+      drawEditor();
+      renderZoneList();
+    }
+
+    function finishEdit() {
+      editingIndex = null;
+      document.body.classList.remove('editing');
+      renderZoneList();
+      update();
+    }
+
+    function sizeEditor() {
+      editor.width = editor.clientWidth;
+      editor.height = editor.clientHeight;
+    }
+
+    // Zeichnet ALLE Zonen-Umrisse: fertige dezent, die gerade editierte hervorgehoben (mit Eckpunkten).
+    function drawEditor() {
+      ectx.clearRect(0, 0, editor.width, editor.height);
+      state.zones.forEach((z, i) => {
+        const pts = z.points;
+        if (!pts.length) return;
+        const active = i === editingIndex;
+        ectx.lineWidth = active ? 2 : 1.5;
+        ectx.strokeStyle = active ? 'rgba(255,122,60,0.95)' : 'rgba(255,122,60,0.6)';
+        ectx.fillStyle = ectx.strokeStyle;
+        ectx.beginPath();
+        pts.forEach((p, k) => {
+          const x = p.x * editor.width, y = p.y * editor.height;
+          if (k === 0) ectx.moveTo(x, y); else ectx.lineTo(x, y);
+        });
+        if (pts.length === 4) ectx.closePath();
+        ectx.stroke();
+        if (active) {
+          for (const p of pts) {
+            ectx.beginPath();
+            ectx.arc(p.x * editor.width, p.y * editor.height, 5, 0, Math.PI * 2);
+            ectx.fill();
+          }
+        }
+      });
+    }
+
+    editor.addEventListener('pointerdown', (e) => {
+      if (editingIndex === null) return;
+      const r = editor.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width;
+      const y = (e.clientY - r.top) / r.height;
+      const pts = state.zones[editingIndex].points;
+      pts.push({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) });
+      renderZoneList(); // Status n/4 aktualisieren
+      drawEditor();
+      if (pts.length === 4) finishEdit();
+    });
+
+    window.addEventListener('resize', () => { if (document.body.classList.contains('zones-mode')) { sizeEditor(); drawEditor(); } });
 
     function readForm() {
       return {
@@ -176,6 +334,8 @@
         maxCircles: el('maxCircles').value,
         mergeRadius: el('mergeRadius').value,
         status: el('status').checked,
+        mode: el('mode').value,
+        grow: el('grow').checked,
       };
     }
 
@@ -189,6 +349,8 @@
       el('maxCircles').value = v.maxCircles ?? 5;
       el('mergeRadius').value = v.mergeRadius ?? 8;
       el('status').checked = !!v.status;
+      el('mode').value = v.mode || 'cluster';
+      el('grow').checked = v.grow !== false; // Default: an
     }
 
     // Baut die Query-Parameter; `forStatus` erzwingt das Status-Badge in der Vorschau.
@@ -202,6 +364,12 @@
       p.set('maxCircles', v.maxCircles);
       p.set('mergeRadius', v.mergeRadius);
       if (forceStatus || v.status) p.set('status', '1');
+      if (v.grow === false) p.set('grow', '0');
+      if (v.mode === 'zones') {
+        p.set('mode', 'zones');
+        const z = encodeZones(state.zones);
+        if (z) p.set('zones', z);
+      }
       return p.toString();
     }
 
@@ -211,7 +379,8 @@
 
     function update() {
       const v = readForm();
-      localStorage.setItem(STORE_KEY, JSON.stringify(v));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ ...v, zones: state.zones }));
+      applyModeVisibility();
 
       const obsUrl = overlayBase() + '?' + buildParams(v, false);
       el('obsUrl').value = obsUrl;
@@ -228,6 +397,30 @@
       el(id).addEventListener('change', update);
     });
 
+    el('addZoneBtn').addEventListener('click', () => {
+      state.zones.push({ points: [] });
+      renderZoneList();
+      update();
+    });
+
+    function applyModeVisibility() {
+      const zones = el('mode').value === 'zones';
+      el('zonesFs').style.display = zones ? '' : 'none';
+      el('editorToolbar').style.display = zones ? 'flex' : 'none';
+      document.body.classList.toggle('zones-mode', zones);
+      applyRefVisibility();
+      if (zones) { sizeEditor(); drawEditor(); } // Umrisse über der Vorschau zeichnen
+    }
+
+    // Referenzbild ist sichtbar, sobald eines geladen ist UND der Zonen-Modus aktiv ist —
+    // unabhängig davon, ob gerade editiert wird. Der „Entfernen"-Button erscheint mit ihm.
+    function applyRefVisibility() {
+      const img = el('refImage');
+      const has = !!img.getAttribute('src');
+      img.style.display = (has && el('mode').value === 'zones') ? 'block' : 'none';
+      el('refClearBtn').style.display = has ? 'inline-block' : 'none';
+    }
+
     el('copyBtn').addEventListener('click', async () => {
       const url = el('obsUrl').value;
       try {
@@ -243,8 +436,34 @@
 
     el('openBtn').addEventListener('click', () => window.open(el('obsUrl').value, '_blank'));
 
+    el('refBtn').addEventListener('click', () => el('refInput').click());
+    el('refInput').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const img = el('refImage');
+      if (img.dataset.objurl) URL.revokeObjectURL(img.dataset.objurl); // altes Bild freigeben
+      const url = URL.createObjectURL(file);
+      img.dataset.objurl = url;
+      img.src = url;
+      el('refInput').value = ''; // erneutes Laden derselben Datei erlauben
+      applyRefVisibility();
+    });
+    el('refClearBtn').addEventListener('click', () => {
+      const img = el('refImage');
+      if (img.dataset.objurl) { URL.revokeObjectURL(img.dataset.objurl); delete img.dataset.objurl; }
+      img.removeAttribute('src');
+      applyRefVisibility();
+    });
+
     // Init: gespeicherte Werte laden, dann Vorschau bauen.
-    try { writeForm(JSON.parse(localStorage.getItem(STORE_KEY))); } catch (e) { /* noop */ }
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (saved) {
+        writeForm(saved);
+        if (Array.isArray(saved.zones)) state.zones = saved.zones;
+      }
+    } catch (e) { /* noop */ }
+    renderZoneList();
     update();
   </script>
 </body>

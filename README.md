@@ -59,6 +59,9 @@ docs/superpowers/specs Design-Dokument
 | `maxCircles` | `5`     | Max. Anzahl Kreise. |
 | `mergeRadius`| `8`     | Cluster-Merge-Radius in % der Breite. |
 | `status`     | `0`     | `1` zeigt ein kleines Status-Badge (Verbindung/Modus). |
+| `mode`       | `cluster` | `zones` = feste Zonen statt Auto-Cluster. |
+| `zones`      | —       | Feste Vierecke `x1,y1,…,x4,y4`, mehrere durch `;` (nur `mode=zones`). |
+| `grow`       | `1`     | `0` = feste Kreisgröße (nur Prozentzahl), Kreise wachsen nicht mit dem Anteil. |
 
 `config.html` baut diese URL für dich zusammen.
 

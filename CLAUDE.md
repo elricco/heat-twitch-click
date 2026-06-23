@@ -24,6 +24,11 @@ Source (HeatSource | SimSource) --onClick(x,y)--> Buffer (gleitendes Fenster)
    pro Frame (requestAnimationFrame): Buffer.current() -> cluster() -> Renderer
 ```
 
+Im Modus `zones` ersetzt `tallyZones(clicks, zones)` das Clustern: pro fester Zone
+(4-Punkt-Viereck) wird der Klick-Anteil im Fenster gezählt und via `createZoneRenderer`
+als Kreis am Zonen-Schwerpunkt gerendert (Umriss nur im Config-Editor). `cluster` bleibt
+der Default-Modus.
+
 Die vier Bausteine in `js/heat-overlay.js` sind bewusst entkoppelt:
 - **Source** — gemeinsames Interface `onClick(x, y)` (beide 0..1 normalisiert).
   `HeatSource` = echter WebSocket; `SimSource` = Mausklicks + optionale Auto-Klicks.
@@ -54,6 +59,9 @@ Die vier Bausteine in `js/heat-overlay.js` sind bewusst entkoppelt:
 | `maxCircles` | `5`     | Max. Anzahl Kreise. |
 | `mergeRadius`| `8`     | Cluster-Merge-Radius in % der Breite (normalisierte Einheiten). |
 | `status`     | `0`     | `1` zeigt ein kleines Status-Badge (Verbindung/Modus). |
+| `mode`       | `cluster` | `zones` aktiviert feste Zonen statt Auto-Cluster. |
+| `zones`      | —       | Feste Vierecke `x1,y1,…,x4,y4`, Zonen per `;` getrennt (nur `mode=zones`). |
+| `grow`       | `1`     | `0` = feste Kreisgröße (nur Prozentzahl), Kreise wachsen nicht mit dem Anteil. |
 
 `config.html` generiert diese URL und merkt die zuletzt genutzten Werte in `localStorage`.
 

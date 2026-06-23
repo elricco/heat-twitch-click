@@ -27,6 +27,9 @@
       maxCircles: Math.max(1, Math.round(num('maxCircles', 5))),
       mergeRadius: Math.max(0.01, num('mergeRadius', 8)) / 100, // Anteil der Breite
       status: p.get('status') === '1',
+      mode: p.get('mode') === 'zones' ? 'zones' : 'cluster',
+      zones: parseZones(p.get('zones')),
+      grow: p.get('grow') !== '0', // false = feste Kreisgröße, nur Prozentzahl
     };
   }
 
@@ -141,7 +144,7 @@
   }
 
   // ---- Renderer: Canvas, weiche Übergänge ----------------------------------
-  function createRenderer(canvas) {
+  function createRenderer(canvas, grow) {
     const ctx = canvas.getContext('2d');
     let visuals = []; // {x,y, tx,ty, share,tshare, op,top}
     const MOVE = 0.18; // Position/Anteil-Lerp
@@ -190,15 +193,19 @@
 
       // Größte zuletzt zeichnen, damit sie oben liegen.
       const ordered = visuals.slice().sort((a, b) => a.share - b.share);
-      for (const v of ordered) drawCircle(ctx, v, W, H);
+      for (const v of ordered) drawCircle(ctx, v, W, H, grow);
     }
 
     return { track, draw };
   }
 
-  function drawCircle(ctx, v, W, H) {
+  function drawCircle(ctx, v, W, H, grow) {
     const minDim = Math.min(W, H);
-    const radius = minDim * (0.06 + v.share * 0.20);
+    // grow !== false: Radius wächst mit dem Anteil (deutlich flacher als früher).
+    // grow === false: feste Kreisgröße, es zählt nur die Prozentzahl.
+    const radius = grow === false
+      ? minDim * 0.085
+      : minDim * (0.045 + v.share * 0.09);
     const x = v.x * W;
     const y = v.y * H;
     const pct = Math.round(v.share * 100);
@@ -229,6 +236,40 @@
     ctx.restore();
   }
 
+  // ---- ZoneRenderer: fixe Kreise an Zonen-Schwerpunkten -------------------
+  function createZoneRenderer(canvas, grow) {
+    const ctx = canvas.getContext('2d');
+    let visuals = []; // index-gleich zu den Zonen: {x,y, share,tshare, op}
+    const MOVE = 0.18; // Anteil-Lerp
+    const FADE = 0.08; // Opacity-Lerp
+
+    function track(zones) {
+      for (let i = 0; i < zones.length; i++) {
+        const z = zones[i];
+        if (!visuals[i]) visuals[i] = { x: z.x, y: z.y, share: z.share, tshare: z.share, op: 0 };
+        visuals[i].x = z.x; // Position ist fix (Schwerpunkt)
+        visuals[i].y = z.y;
+        visuals[i].tshare = z.share;
+      }
+      visuals.length = zones.length; // entfernte Zonen fallen weg
+    }
+
+    function draw() {
+      const W = canvas.width;
+      const H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      for (const v of visuals) {
+        v.share += (v.tshare - v.share) * MOVE;
+        v.op += (1 - v.op) * FADE;
+      }
+      // Größte zuletzt zeichnen, damit sie oben liegt.
+      const ordered = visuals.slice().sort((a, b) => a.share - b.share);
+      for (const v of ordered) drawCircle(ctx, v, W, H, grow);
+    }
+
+    return { track, draw };
+  }
+
   // ---- Canvas an Device-Pixel anpassen -------------------------------------
   function setupCanvas(canvas) {
     function resize() {
@@ -238,6 +279,52 @@
     }
     resize();
     window.addEventListener('resize', resize);
+  }
+
+  // ---- Zonen: URL-String -> Liste von 4-Punkt-Vierecken --------------------
+  function parseZones(str) {
+    if (!str) return [];
+    return String(str).split(';').map((seg) => {
+      const n = seg.split(',').map((v) => parseFloat(v));
+      if (n.length !== 8 || n.some((v) => !Number.isFinite(v))) return null;
+      return [
+        { x: n[0], y: n[1] },
+        { x: n[2], y: n[3] },
+        { x: n[4], y: n[5] },
+        { x: n[6], y: n[7] },
+      ];
+    }).filter(Boolean);
+  }
+
+  // Standard-Ray-Casting; korrekt auch für nicht-konvexe Vierecke.
+  function pointInPolygon(pt, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y;
+      const xj = poly[j].x, yj = poly[j].y;
+      const hit = ((yi > pt.y) !== (yj > pt.y)) &&
+        (pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi);
+      if (hit) inside = !inside;
+    }
+    return inside;
+  }
+
+  function centroid(poly) {
+    let sx = 0, sy = 0;
+    for (const p of poly) { sx += p.x; sy += p.y; }
+    return { x: sx / poly.length, y: sy / poly.length };
+  }
+
+  // Zählt Klicks je Zone (Point-in-Polygon). Nenner = alle Klicks im Fenster.
+  // Zonen dürfen überlappen; ein Klick zählt in jede ihn enthaltende Zone.
+  function tallyZones(clicks, zones) {
+    const total = clicks.length;
+    return zones.map((poly) => {
+      let count = 0;
+      if (total) for (const c of clicks) { if (pointInPolygon(c, poly)) count++; }
+      const ctr = centroid(poly);
+      return { x: ctr.x, y: ctr.y, count, share: total ? count / total : 0 };
+    });
   }
 
   // ---- Bootstrap -----------------------------------------------------------
@@ -258,16 +345,30 @@
       HeatSource(cfg.channel, onClick, log);
     }
 
-    const renderer = createRenderer(canvas);
-    function frame() {
-      const clicks = buffer.current();
-      const clusters = cluster(clicks, cfg.mergeRadius, cfg.maxCircles, cfg.threshold);
-      renderer.track(clusters);
-      renderer.draw();
+    if (cfg.mode === 'zones') {
+      const zoneRenderer = createZoneRenderer(canvas, cfg.grow);
+      const zoneFrame = () => {
+        const clicks = buffer.current();
+        zoneRenderer.track(tallyZones(clicks, cfg.zones));
+        zoneRenderer.draw();
+        requestAnimationFrame(zoneFrame);
+      };
+      requestAnimationFrame(zoneFrame);
+    } else {
+      const renderer = createRenderer(canvas, cfg.grow);
+      const frame = () => {
+        const clicks = buffer.current();
+        const clusters = cluster(clicks, cfg.mergeRadius, cfg.maxCircles, cfg.threshold);
+        renderer.track(clusters);
+        renderer.draw();
+        requestAnimationFrame(frame);
+      };
       requestAnimationFrame(frame);
     }
-    requestAnimationFrame(frame);
   }
 
-  window.HeatOverlay = { init };
+  if (typeof window !== 'undefined') window.HeatOverlay = { init };
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { parseZones, pointInPolygon, centroid, tallyZones };
+  }
 })();
