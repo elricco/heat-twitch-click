@@ -255,6 +255,25 @@
     }).filter(Boolean);
   }
 
+  // Standard-Ray-Casting; korrekt auch für nicht-konvexe Vierecke.
+  function pointInPolygon(pt, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y;
+      const xj = poly[j].x, yj = poly[j].y;
+      const hit = ((yi > pt.y) !== (yj > pt.y)) &&
+        (pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi);
+      if (hit) inside = !inside;
+    }
+    return inside;
+  }
+
+  function centroid(poly) {
+    let sx = 0, sy = 0;
+    for (const p of poly) { sx += p.x; sy += p.y; }
+    return { x: sx / poly.length, y: sy / poly.length };
+  }
+
   // ---- Bootstrap -----------------------------------------------------------
   function init() {
     const cfg = readConfig();
@@ -286,6 +305,6 @@
 
   if (typeof window !== 'undefined') window.HeatOverlay = { init };
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { parseZones };
+    module.exports = { parseZones, pointInPolygon, centroid };
   }
 })();
