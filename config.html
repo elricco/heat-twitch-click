@@ -200,6 +200,7 @@
     <div class="editor-toolbar" id="editorToolbar">
       <span class="note" id="editorHint">Im Zonen-Modus „Editieren" wählen, dann 4 Punkte klicken.</span>
       <button type="button" class="secondary" id="refBtn">Referenzbild laden</button>
+      <button type="button" class="secondary" id="refClearBtn" style="display:none">Referenzbild entfernen</button>
       <input type="file" id="refInput" accept="image/*" style="display:none">
     </div>
   </div>
@@ -243,7 +244,7 @@
         del.textContent = 'Löschen';
         del.addEventListener('click', () => {
           state.zones.splice(i, 1);
-          if (editingIndex === i) { editingIndex = null; document.body.classList.remove('editing'); el('refImage').style.display = 'none'; }
+          if (editingIndex === i) { editingIndex = null; document.body.classList.remove('editing'); }
           else if (editingIndex !== null && i < editingIndex) editingIndex--;
           renderZoneList();
           update();
@@ -259,8 +260,6 @@
       editingIndex = i;
       state.zones[i].points = [];
       document.body.classList.add('editing');
-      const ref = el('refImage');
-      if (ref.getAttribute('src')) ref.style.display = 'block'; // nur während des Editierens als Backdrop
       sizeEditor();
       drawEditor();
       renderZoneList();
@@ -269,7 +268,6 @@
     function finishEdit() {
       editingIndex = null;
       document.body.classList.remove('editing');
-      el('refImage').style.display = 'none'; // Live-Vorschau (Kreise) wieder freigeben
       renderZoneList();
       update();
     }
@@ -393,6 +391,16 @@
     function applyModeVisibility() {
       el('zonesFs').style.display = el('mode').value === 'zones' ? '' : 'none';
       el('editorToolbar').style.display = (el('mode').value === 'zones') ? 'flex' : 'none';
+      applyRefVisibility();
+    }
+
+    // Referenzbild ist sichtbar, sobald eines geladen ist UND der Zonen-Modus aktiv ist —
+    // unabhängig davon, ob gerade editiert wird. Der „Entfernen"-Button erscheint mit ihm.
+    function applyRefVisibility() {
+      const img = el('refImage');
+      const has = !!img.getAttribute('src');
+      img.style.display = (has && el('mode').value === 'zones') ? 'block' : 'none';
+      el('refClearBtn').style.display = has ? 'inline-block' : 'none';
     }
 
     el('copyBtn').addEventListener('click', async () => {
@@ -415,8 +423,18 @@
       const file = e.target.files && e.target.files[0];
       if (!file) return;
       const img = el('refImage');
-      img.src = URL.createObjectURL(file);
-      if (editingIndex !== null) img.style.display = 'block'; // nur im Editiermodus zeigen
+      if (img.dataset.objurl) URL.revokeObjectURL(img.dataset.objurl); // altes Bild freigeben
+      const url = URL.createObjectURL(file);
+      img.dataset.objurl = url;
+      img.src = url;
+      el('refInput').value = ''; // erneutes Laden derselben Datei erlauben
+      applyRefVisibility();
+    });
+    el('refClearBtn').addEventListener('click', () => {
+      const img = el('refImage');
+      if (img.dataset.objurl) { URL.revokeObjectURL(img.dataset.objurl); delete img.dataset.objurl; }
+      img.removeAttribute('src');
+      applyRefVisibility();
     });
 
     // Init: gespeicherte Werte laden, dann Vorschau bauen.
