@@ -197,7 +197,7 @@
       <img id="refImage" class="editor-bg" alt="">
       <canvas id="editor" class="editor-layer"></canvas>
     </div>
-    <div class="editor-toolbar">
+    <div class="editor-toolbar" id="editorToolbar">
       <span class="note" id="editorHint">Im Zonen-Modus „Editieren" wählen, dann 4 Punkte klicken.</span>
       <button type="button" class="secondary" id="refBtn">Referenzbild laden</button>
       <input type="file" id="refInput" accept="image/*" style="display:none">
@@ -217,6 +217,8 @@
         .map((z) => z.points.map((p) => round4(p.x) + ',' + round4(p.y)).join(','))
         .join(';');
     }
+
+    const el = (id) => document.getElementById(id);
 
     function renderZoneList() {
       const list = el('zoneList');
@@ -250,8 +252,6 @@
         list.appendChild(row);
       });
     }
-    const el = (id) => document.getElementById(id);
-
     const editor = el('editor');
     const ectx = editor.getContext('2d');
 
@@ -392,6 +392,7 @@
 
     function applyModeVisibility() {
       el('zonesFs').style.display = el('mode').value === 'zones' ? '' : 'none';
+      el('editorToolbar').style.display = (el('mode').value === 'zones') ? 'flex' : 'none';
     }
 
     el('copyBtn').addEventListener('click', async () => {
