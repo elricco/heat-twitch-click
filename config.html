@@ -86,11 +86,13 @@
       background-position: 0 0, 0 12px, 12px -12px, -12px 0;
       position: relative;
     }
-    .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    /* Schichten in der Stage (unten → oben): Referenzbild · Vorschau (Kreise) · Zonen-Umrisse */
+    .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 2; }
     .editor-bg, .editor-layer { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
-    .editor-bg { object-fit: fill; z-index: 2; }
-    .editor-layer { z-index: 3; cursor: crosshair; }
-    body.editing .editor-layer { display: block; }
+    .editor-bg { object-fit: fill; z-index: 1; }                /* Referenzbild: hinter der Vorschau */
+    .editor-layer { z-index: 3; pointer-events: none; }         /* Zonen-Umrisse: über der Vorschau */
+    body.zones-mode .editor-layer { display: block; }           /* im Zonen-Modus immer sichtbar */
+    body.editing .editor-layer { pointer-events: auto; cursor: crosshair; } /* nur beim Editieren klickbar */
     .editor-toolbar { display: flex; gap: 8px; align-items: center; }
     .editor-toolbar .note { flex: 1; }
     .note { color: var(--muted); font-size: 12px; }
@@ -277,25 +279,31 @@
       editor.height = editor.clientHeight;
     }
 
+    // Zeichnet ALLE Zonen-Umrisse: fertige dezent, die gerade editierte hervorgehoben (mit Eckpunkten).
     function drawEditor() {
       ectx.clearRect(0, 0, editor.width, editor.height);
-      if (editingIndex === null) return;
-      const pts = state.zones[editingIndex].points;
-      ectx.lineWidth = 2;
-      ectx.strokeStyle = 'rgba(255,122,60,0.95)';
-      ectx.fillStyle = 'rgba(255,122,60,0.95)';
-      ectx.beginPath();
-      pts.forEach((p, k) => {
-        const x = p.x * editor.width, y = p.y * editor.height;
-        if (k === 0) ectx.moveTo(x, y); else ectx.lineTo(x, y);
-      });
-      if (pts.length === 4) ectx.closePath();
-      ectx.stroke();
-      for (const p of pts) {
+      state.zones.forEach((z, i) => {
+        const pts = z.points;
+        if (!pts.length) return;
+        const active = i === editingIndex;
+        ectx.lineWidth = active ? 2 : 1.5;
+        ectx.strokeStyle = active ? 'rgba(255,122,60,0.95)' : 'rgba(255,122,60,0.6)';
+        ectx.fillStyle = ectx.strokeStyle;
         ectx.beginPath();
-        ectx.arc(p.x * editor.width, p.y * editor.height, 5, 0, Math.PI * 2);
-        ectx.fill();
-      }
+        pts.forEach((p, k) => {
+          const x = p.x * editor.width, y = p.y * editor.height;
+          if (k === 0) ectx.moveTo(x, y); else ectx.lineTo(x, y);
+        });
+        if (pts.length === 4) ectx.closePath();
+        ectx.stroke();
+        if (active) {
+          for (const p of pts) {
+            ectx.beginPath();
+            ectx.arc(p.x * editor.width, p.y * editor.height, 5, 0, Math.PI * 2);
+            ectx.fill();
+          }
+        }
+      });
     }
 
     editor.addEventListener('pointerdown', (e) => {
@@ -310,7 +318,7 @@
       if (pts.length === 4) finishEdit();
     });
 
-    window.addEventListener('resize', () => { if (editingIndex !== null) { sizeEditor(); drawEditor(); } });
+    window.addEventListener('resize', () => { if (document.body.classList.contains('zones-mode')) { sizeEditor(); drawEditor(); } });
 
     function readForm() {
       return {
@@ -389,9 +397,12 @@
     });
 
     function applyModeVisibility() {
-      el('zonesFs').style.display = el('mode').value === 'zones' ? '' : 'none';
-      el('editorToolbar').style.display = (el('mode').value === 'zones') ? 'flex' : 'none';
+      const zones = el('mode').value === 'zones';
+      el('zonesFs').style.display = zones ? '' : 'none';
+      el('editorToolbar').style.display = zones ? 'flex' : 'none';
+      document.body.classList.toggle('zones-mode', zones);
       applyRefVisibility();
+      if (zones) { sizeEditor(); drawEditor(); } // Umrisse über der Vorschau zeichnen
     }
 
     // Referenzbild ist sichtbar, sobald eines geladen ist UND der Zonen-Modus aktiv ist —
