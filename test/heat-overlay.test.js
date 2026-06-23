@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { parseZones } = require('../js/heat-overlay.js');
+const { parseZones, pointInPolygon, centroid, tallyZones } = require('../js/heat-overlay.js');
 
 test('parseZones: leerer/fehlender Input ergibt []', () => {
   assert.deepStrictEqual(parseZones(''), []);
@@ -27,7 +27,6 @@ test('parseZones: kaputte Segmente werden verworfen, gültige bleiben', () => {
   assert.strictEqual(zones.length, 1);
 });
 
-const { pointInPolygon, centroid } = require('../js/heat-overlay.js');
 const unitSquare = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
 
 test('pointInPolygon: Punkt innen', () => {
@@ -47,4 +46,32 @@ test('pointInPolygon: nicht-konvexes Viereck', () => {
 
 test('centroid: Einheitsquadrat -> Mitte', () => {
   assert.deepStrictEqual(centroid(unitSquare), { x: 0.5, y: 0.5 });
+});
+
+test('tallyZones: Shares über alle Klicks, eine Zone pro Eingang', () => {
+  const left = [{ x: 0, y: 0 }, { x: 0.5, y: 0 }, { x: 0.5, y: 1 }, { x: 0, y: 1 }];
+  const right = [{ x: 0.5, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.5, y: 1 }];
+  const clicks = [{ x: 0.1, y: 0.5 }, { x: 0.2, y: 0.5 }, { x: 0.9, y: 0.5 }, { x: 0.99, y: 0.99 }];
+  const out = tallyZones(clicks, [left, right]);
+  assert.strictEqual(out.length, 2);
+  assert.strictEqual(out[0].count, 2);
+  assert.strictEqual(out[0].share, 0.5);
+  assert.strictEqual(out[1].count, 2);
+  assert.ok(Math.abs(out[0].x - 0.25) < 1e-9); // Schwerpunkt linke Zone
+});
+
+test('tallyZones: überlappende Zonen zählen denselben Klick doppelt', () => {
+  const big = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
+  const small = [{ x: 0.4, y: 0.4 }, { x: 0.6, y: 0.4 }, { x: 0.6, y: 0.6 }, { x: 0.4, y: 0.6 }];
+  const out = tallyZones([{ x: 0.5, y: 0.5 }], [big, small]);
+  assert.strictEqual(out[0].count, 1);
+  assert.strictEqual(out[1].count, 1);
+});
+
+test('tallyZones: keine Klicks -> share 0, Zonen bleiben erhalten', () => {
+  const z = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
+  const out = tallyZones([], [z]);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].count, 0);
+  assert.strictEqual(out[0].share, 0);
 });

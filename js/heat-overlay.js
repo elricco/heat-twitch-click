@@ -274,6 +274,18 @@
     return { x: sx / poly.length, y: sy / poly.length };
   }
 
+  // Zählt Klicks je Zone (Point-in-Polygon). Nenner = alle Klicks im Fenster.
+  // Zonen dürfen überlappen; ein Klick zählt in jede ihn enthaltende Zone.
+  function tallyZones(clicks, zones) {
+    const total = clicks.length;
+    return zones.map((poly) => {
+      let count = 0;
+      if (total) for (const c of clicks) { if (pointInPolygon(c, poly)) count++; }
+      const ctr = centroid(poly);
+      return { x: ctr.x, y: ctr.y, count, share: total ? count / total : 0 };
+    });
+  }
+
   // ---- Bootstrap -----------------------------------------------------------
   function init() {
     const cfg = readConfig();
@@ -305,6 +317,6 @@
 
   if (typeof window !== 'undefined') window.HeatOverlay = { init };
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { parseZones, pointInPolygon, centroid };
+    module.exports = { parseZones, pointInPolygon, centroid, tallyZones };
   }
 })();
