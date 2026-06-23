@@ -22,6 +22,21 @@ Reiner Proof of Concept: nur Visualisierung — kein Backend, keine Dependencies
 > muss vom Kanalinhaber im Twitch-Dashboard installiert und aktiviert sein, damit echte
 > Klicks ankommen.
 
+## Channel-ID finden
+
+Heat braucht die **numerische** Twitch-User-ID des Kanals (nicht den Anzeigenamen).
+
+- **Am einfachsten – [DecAPI](https://decapi.me/):** im Browser
+  `https://decapi.me/twitch/id/DEIN_USERNAME` aufrufen → gibt direkt die Zahl zurück
+  (z. B. `97032862`). Kein Login nötig.
+- **Converter-Tool:** z. B. [streamweasels.com](https://www.streamweasels.com/tools/convert-twitch-username-to-user-id/)
+  – Username eintippen, ID ablesen.
+- **Offiziell per Twitch-API** (nur falls du ohnehin eine App/Token hast):
+  `GET https://api.twitch.tv/helix/users?login=DEIN_USERNAME` → Feld `id`.
+
+Die Zahl ins Feld „Twitch-Channel-ID" der `config.html` eintragen. Bleibt das Overlay leer,
+ist meist die Extension nicht aktiv oder es klickt gerade niemand – dann erst im Sim-Modus testen.
+
 ## Dateien
 
 ```
