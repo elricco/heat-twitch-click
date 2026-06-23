@@ -241,7 +241,7 @@
         del.textContent = 'Löschen';
         del.addEventListener('click', () => {
           state.zones.splice(i, 1);
-          if (editingIndex === i) editingIndex = null;
+          if (editingIndex === i) { editingIndex = null; document.body.classList.remove('editing'); el('refImage').style.display = 'none'; }
           else if (editingIndex !== null && i < editingIndex) editingIndex--;
           renderZoneList();
           update();
@@ -260,7 +260,7 @@
       state.zones[i].points = [];
       document.body.classList.add('editing');
       const ref = el('refImage');
-      if (ref.src) ref.style.display = 'block'; // nur während des Editierens als Backdrop
+      if (ref.getAttribute('src')) ref.style.display = 'block'; // nur während des Editierens als Backdrop
       sizeEditor();
       drawEditor();
       renderZoneList();
