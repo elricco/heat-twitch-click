@@ -28,7 +28,7 @@
       mergeRadius: Math.max(0.01, num('mergeRadius', 8)) / 100, // Anteil der Breite
       status: p.get('status') === '1',
       mode: p.get('mode') === 'zones' ? 'zones' : 'cluster',
-      zones: parseZones(p.get('zones')),
+      zones: window.HeatZones.parseZones(p.get('zones')),
       grow: p.get('grow') !== '0', // false = feste Kreisgröße, nur Prozentzahl
     };
   }
@@ -281,52 +281,6 @@
     window.addEventListener('resize', resize);
   }
 
-  // ---- Zonen: URL-String -> Liste von 4-Punkt-Vierecken --------------------
-  function parseZones(str) {
-    if (!str) return [];
-    return String(str).split(';').map((seg) => {
-      const n = seg.split(',').map((v) => parseFloat(v));
-      if (n.length !== 8 || n.some((v) => !Number.isFinite(v))) return null;
-      return [
-        { x: n[0], y: n[1] },
-        { x: n[2], y: n[3] },
-        { x: n[4], y: n[5] },
-        { x: n[6], y: n[7] },
-      ];
-    }).filter(Boolean);
-  }
-
-  // Standard-Ray-Casting; korrekt auch für nicht-konvexe Vierecke.
-  function pointInPolygon(pt, poly) {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const xi = poly[i].x, yi = poly[i].y;
-      const xj = poly[j].x, yj = poly[j].y;
-      const hit = ((yi > pt.y) !== (yj > pt.y)) &&
-        (pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi);
-      if (hit) inside = !inside;
-    }
-    return inside;
-  }
-
-  function centroid(poly) {
-    let sx = 0, sy = 0;
-    for (const p of poly) { sx += p.x; sy += p.y; }
-    return { x: sx / poly.length, y: sy / poly.length };
-  }
-
-  // Zählt Klicks je Zone (Point-in-Polygon). Nenner = alle Klicks im Fenster.
-  // Zonen dürfen überlappen; ein Klick zählt in jede ihn enthaltende Zone.
-  function tallyZones(clicks, zones) {
-    const total = clicks.length;
-    return zones.map((poly) => {
-      let count = 0;
-      if (total) for (const c of clicks) { if (pointInPolygon(c, poly)) count++; }
-      const ctr = centroid(poly);
-      return { x: ctr.x, y: ctr.y, count, share: total ? count / total : 0 };
-    });
-  }
-
   // ---- Bootstrap -----------------------------------------------------------
   function init() {
     const cfg = readConfig();
@@ -349,7 +303,7 @@
       const zoneRenderer = createZoneRenderer(canvas, cfg.grow);
       const zoneFrame = () => {
         const clicks = buffer.current();
-        zoneRenderer.track(tallyZones(clicks, cfg.zones));
+        zoneRenderer.track(window.HeatZones.tallyZones(clicks, cfg.zones));
         zoneRenderer.draw();
         requestAnimationFrame(zoneFrame);
       };
@@ -368,7 +322,4 @@
   }
 
   if (typeof window !== 'undefined') window.HeatOverlay = { init };
-  if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { parseZones, pointInPolygon, centroid, tallyZones };
-  }
 })();

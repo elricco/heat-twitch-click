@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { parseZones, pointInPolygon, centroid, tallyZones } = require('../js/heat-overlay.js');
+const { parseZones, pointInPolygon, centroid, tallyZones } = require('../js/heat-zones.js');
 
 test('parseZones: leerer/fehlender Input ergibt []', () => {
   assert.deepStrictEqual(parseZones(''), []);
