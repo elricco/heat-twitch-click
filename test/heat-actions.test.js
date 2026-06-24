@@ -75,3 +75,22 @@ test('parseActions: leerer/fehlender String -> alle skip', () => {
   assert.strictEqual(out.length, 2);
   assert.ok(out.every((e) => e.action === ''));
 });
+
+test('buildDoAction: korrektes DoAction-JSON', () => {
+  const { buildDoAction } = require('../js/heat-actions.js');
+  const msg = buildDoAction({ zone: 'Z1', action: 'Link posten', count: 23, share: 0.31, channel: '97032862', now: 1700000000000 });
+  assert.strictEqual(msg.request, 'DoAction');
+  assert.strictEqual(msg.id, 'heat:Z1:1700000000000');
+  assert.deepStrictEqual(msg.action, { name: 'Link posten' });
+  assert.deepStrictEqual(msg.args, { zone: 'Z1', count: 23, share: 0.31, channel: '97032862' });
+});
+
+test('computeAuth: bekannter Vektor (zwei verkettete sha256->base64)', async () => {
+  const { computeAuth } = require('../js/heat-actions.js');
+  // secret = base64(sha256('pw'+'salt')); auth = base64(sha256(secret+'chal'))
+  const crypto = require('crypto');
+  const secret = crypto.createHash('sha256').update('pw' + 'salt', 'utf8').digest('base64');
+  const expected = crypto.createHash('sha256').update(secret + 'chal', 'utf8').digest('base64');
+  const got = await computeAuth('pw', 'salt', 'chal');
+  assert.strictEqual(got, expected);
+});
