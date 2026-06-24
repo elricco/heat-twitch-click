@@ -20,3 +20,6 @@ yarn-error.log*
 *.log
 .tmp/
 .cache/
+
+# Release-Artefakte (werden als GitHub-Release-Asset hochgeladen, nicht committed)
+heat-twitch-click-v*.zip
