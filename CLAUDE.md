@@ -8,6 +8,7 @@ eines gleitenden Zeitfensters. Reiner Proof of Concept — nur Visualisierung.
 ## Projektstruktur
 
 ```
+index.html            Einstiegspunkt für GitHub Pages. Meta-Refresh-Redirect auf config.html.
 overlay.html          OBS-Overlay (transparent, vollflächiges Canvas). Lädt js/heat-overlay.js.
 config.html           Einstell-UI + Live-Vorschau (iframe) + OBS-URL-Generator. Kein Backend.
 js/heat-overlay.js    Gesamte Logik: source / buffer / clusterer / renderer + init().
@@ -16,6 +17,11 @@ docs/superpowers/specs/  Design-Dokument(e).
 
 Kein Build-Step, kein Server, keine Dependencies. Dateien direkt per `file://` oder einem
 beliebigen statischen Server ausliefern. Einstieg immer über **config.html**.
+
+**Deployment:** Läuft unverändert als GitHub Page (statisch, kein Build). Pages-Quelle =
+`main` / `/ (root)`; `index.html` redirectet auf config.html, damit die Wurzel-URL nicht 404t.
+Live: <https://elricco.github.io/heat-twitch-click/>. config.html baut die Overlay-URL relativ
+(`new URL('overlay.html', location.href)`), funktioniert daher unter `file://` und auf Pages.
 
 ## Datenfluss
 

@@ -22,6 +22,19 @@ Reiner Proof of Concept: nur Visualisierung — kein Backend, keine Dependencies
 > muss vom Kanalinhaber im Twitch-Dashboard installiert und aktiviert sein, damit echte
 > Klicks ankommen.
 
+## Online nutzen (GitHub Pages)
+
+Das Projekt ist rein statisch und läuft direkt als GitHub Page – ohne lokale Dateien zu verteilen:
+
+- **Einstieg / OBS-URL-Generator:** <https://elricco.github.io/heat-twitch-click/>
+- **Overlay direkt (für die OBS-Browser-Quelle):** <https://elricco.github.io/heat-twitch-click/overlay.html>
+
+Der „Kopieren"-Button erzeugt automatisch die passende `github.io`-URL (relativ aufgelöst).
+Über HTTPS gibt es kein Mixed-Content-Problem, weil Heat per `wss://` (sicher) angebunden ist –
+für OBS ist dieser Link daher angenehmer als ein lokaler `file://`-Pfad.
+
+> Pages-Quelle: Repo-**Settings → Pages → Deploy from a branch → `main` / `/ (root)`**.
+
 ## Channel-ID finden
 
 Heat braucht die **numerische** Twitch-User-ID des Kanals (nicht den Anzeigenamen).
@@ -40,6 +53,7 @@ ist meist die Extension nicht aktiv oder es klickt gerade niemand – dann erst 
 ## Dateien
 
 ```
+index.html            Einstiegspunkt für GitHub Pages → leitet auf config.html weiter
 overlay.html          OBS-Overlay (transparent, vollflächiges Canvas)
 config.html           Einstell-UI + Live-Vorschau + OBS-URL-Generator (merkt Werte in localStorage)
 js/heat-overlay.js    Logik: source / buffer / clusterer / renderer
