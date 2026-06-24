@@ -108,7 +108,7 @@ Ein dritter Overlay-Modus triggert **Streamer.Bot-Actions** aufgrund von Klick-S
   - Trägt die gleichen Zonen und Klick-Daten wie das Overlay.
   - Evaluiert pro Zone: absolute Klickzahl im gleitenden Fenster → Trigger (Cooldown + Hysterese)
     → DoAction-Request an Streamer.Bot WebSocket.
-  - Status-Panel zeigt Heat-Verbindung, Streamer.Bot-Status, Trigger-Log und Zone-Markierungen.
+  - Status-Panel zeigt Heat-Verbindung, Streamer.Bot-Status, Zone-Action-Badges und Trigger-Log.
 - **Streamer.Bot Verbindung:**
   - WebSocket-URL (default `ws://127.0.0.1:8080/`) und optionales Auth-Token konfigurierbar.
   - Sendet benannte Actions per Zone; Arguments: Zone-Index, Klickzahl, Anteil, Channel.

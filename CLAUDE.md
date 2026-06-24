@@ -65,7 +65,7 @@ Die Bausteine sind bewusst entkoppelt:
 - **tallyZones(clicks, zones)** — zählt pro Zone die Klicks (Overlay + Bridge).
 - **evaluateZones(states, counts, now, cfg)** — Trigger-Maschine mit Cooldown/Hysterese (nur Bridge).
 - **createRenderer(canvas)** — `track()` / `draw()` mit weicher Interpolation (nur Overlay).
-- **createSbClient(url, token, log, onStatus)** — Streamer.Bot WebSocket + Auth-Handshake (nur Bridge).
+- **createSbClient({ url, token, log, onStatus })** — Streamer.Bot WebSocket + Auth-Handshake (nur Bridge).
 
 ## Heat — verifizierte Fakten
 
@@ -106,7 +106,6 @@ Die Bausteine sind bewusst entkoppelt:
 | `sbtoken`    | —       | Auth-Token für Streamer.Bot (optional). |
 | `actions`    | —       | Pro Zone: `enter\|rearm\|cooldown\|<action>`, Zonen durch `;` getrennt. Beispiel: `20\|10\|60\|Link%20posten;15\|8\|45\|Discord` — Zone 1 triggert bei ≥20 Klicks, re-armed bei ≤10, Sperrzeit 60 Sek., Action-Name „Link posten". |
 | `dryrun`     | `0`     | `1` = evaluieren + loggen, aber nicht an Streamer.Bot senden (zum Testen der Schwellen). |
-| `status`     | `1`     | Status-Panel anzeigen (Heat, Streamer.Bot, Trigger-Log, Zone-Markierungen). |
 
 **Codierung von `actions`:** `enter` = Klicks im gleitenden Fenster bis Auslösung (Ganzzahl),
 `rearm` = Klicks zum Zurücksetzen auf scharf (Ganzzahl, automatisch auf `max(0, enter-1)` wenn ungültig),
@@ -129,8 +128,8 @@ Die Bausteine sind bewusst entkoppelt:
    eintragen.
 3. Streamer.Bot WebSocket-URL + optionales Auth-Token eingeben.
 4. „Kopieren" → die fertige `actions.html`-URL in OBS als **zweite, unsichtbare Browser-Quelle**
-   einfügen (oder als separate Window/Source je nach OBS-Setup). Status-Panel ist optional
-   (`status=1` ist Default).
+   einfügen (oder als separate Window/Source je nach OBS-Setup). Status-Panel zeigt immer
+   Heat-Verbindung, Streamer.Bot-Status, Zone-Action-Badges und Trigger-Log.
 5. **Hinweis Mixed-Content:** `actions.html` über HTTPS (GitHub Pages) kann auf `ws://127.0.0.1`
    (lokal) stoßen; moderne Browser blockieren das ggf. In OBS/CEF sollte es funktionieren, aber
    falls nicht: entweder `actions.html` lokal laden (`file://`), oder Streamer.Bot über
