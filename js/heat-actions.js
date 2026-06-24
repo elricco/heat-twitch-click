@@ -25,7 +25,31 @@
     return { states: out, fires };
   }
 
-  const api = { evaluateZones };
+  function parseActions(str, zonesLen) {
+    const skip = () => ({ action: '', enter: 0, rearm: 0, cooldown: 0 });
+    const out = [];
+    const segs = str ? String(str).split(';') : [];
+    for (let i = 0; i < zonesLen; i++) {
+      const seg = segs[i];
+      if (!seg) { out.push(skip()); continue; }
+      const f = seg.split('|');
+      const enter = parseInt(f[0], 10);
+      let rearm = parseInt(f[1], 10);
+      const cooldownSec = parseInt(f[2], 10);
+      const action = f[3] ? decodeURIComponent(f[3]) : '';
+      if (!action || !Number.isFinite(enter)) { out.push(skip()); continue; }
+      if (!Number.isFinite(rearm) || rearm >= enter) rearm = Math.max(0, enter - 1);
+      out.push({
+        action,
+        enter,
+        rearm,
+        cooldown: (Number.isFinite(cooldownSec) ? cooldownSec : 0) * 1000,
+      });
+    }
+    return out;
+  }
+
+  const api = { evaluateZones, parseActions };
   if (typeof window !== 'undefined') window.HeatActions = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();
