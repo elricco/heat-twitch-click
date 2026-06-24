@@ -91,7 +91,7 @@
     .editor-bg, .editor-layer { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
     .editor-bg { object-fit: fill; z-index: 1; }                /* Referenzbild: hinter der Vorschau */
     .editor-layer { z-index: 3; pointer-events: none; }         /* Zonen-Umrisse: über der Vorschau */
-    body.zones-mode .editor-layer { display: block; }           /* im Zonen-Modus immer sichtbar */
+    body.zones-mode .editor-layer, body.actions-mode .editor-layer { display: block; }  /* im Zonen-/Aktions-Modus immer sichtbar */
     body.editing .editor-layer { pointer-events: auto; cursor: crosshair; } /* nur beim Editieren klickbar */
     .editor-toolbar { display: flex; gap: 8px; align-items: center; }
     .editor-toolbar .note { flex: 1; }
@@ -113,6 +113,7 @@
         <select id="mode">
           <option value="cluster">Cluster (automatische Hotspots)</option>
           <option value="zones">Zonen (feste Vierecke)</option>
+          <option value="actions">Aktions-Zonen (Streamer.Bot)</option>
         </select>
         <div class="hint">„Zonen" misst Klick-Anteile in selbst platzierten Bereichen.</div>
       </div>
@@ -177,6 +178,19 @@
       </div>
     </fieldset>
 
+    <fieldset id="sbFs">
+      <legend>Streamer.Bot</legend>
+      <div class="field">
+        <label for="sb">WebSocket-URL</label>
+        <input type="text" id="sb" placeholder="ws://127.0.0.1:8080/">
+      </div>
+      <div class="field">
+        <label for="sbtoken">Auth-Token (optional)</label>
+        <input type="text" id="sbtoken" placeholder="leer = keine Authentifizierung">
+      </div>
+      <div class="hint">Pro Zone unten Action-Name + Schwellen setzen. „enter" = Klicks im Fenster bis Auslösung, „rearm" = darunter wird wieder scharf, „cooldown" = Sperrzeit (Sek.).</div>
+    </fieldset>
+
     <fieldset>
       <legend>OBS-URL</legend>
       <div class="urlbox">
@@ -213,10 +227,16 @@
 
   <script>
     const STORE_KEY = 'heat-overlay-config';
-    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status', 'mode', 'grow'];
+    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status', 'mode', 'grow', 'sb', 'sbtoken'];
     const round4 = (v) => Math.round(v * 1e4) / 1e4;
     let state = { zones: [] }; // zones: [{ points: [{x,y}, ...] }]  (0..4 Punkte)
     let editingIndex = null;   // von Task 6 genutzt
+
+    function encodeActions(zones) {
+      return zones.filter((z) => z.points.length === 4).map((z) =>
+        [z.enter ?? 20, z.rearm ?? 10, z.cooldown ?? 60, encodeURIComponent(z.action || '')].join('|')
+      ).join(';');
+    }
 
     function encodeZones(zones) {
       return zones
@@ -255,7 +275,25 @@
           renderZoneList();
           update();
         });
-        row.append(name, st, edit, del);
+        if (el('mode').value === 'actions') {
+          const z = state.zones[i];
+          if (z.action === undefined) { z.action = ''; z.enter = 20; z.rearm = 10; z.cooldown = 60; }
+          const mk = (key, ph, w) => {
+            const inp = document.createElement('input');
+            inp.type = key === 'action' ? 'text' : 'number';
+            inp.placeholder = ph; inp.value = z[key]; inp.style.width = w;
+            inp.addEventListener('input', () => {
+              z[key] = key === 'action' ? inp.value : Number(inp.value);
+              update();
+            });
+            return inp;
+          };
+          row.append(name, st, mk('action', 'Action-Name', '120px'),
+            mk('enter', 'enter', '64px'), mk('rearm', 'rearm', '64px'),
+            mk('cooldown', 'cd s', '56px'), edit, del);
+        } else {
+          row.append(name, st, edit, del);
+        }
         list.appendChild(row);
       });
     }
@@ -322,7 +360,7 @@
       if (pts.length === 4) finishEdit();
     });
 
-    window.addEventListener('resize', () => { if (document.body.classList.contains('zones-mode')) { sizeEditor(); drawEditor(); } });
+    window.addEventListener('resize', () => { if (document.body.classList.contains('zones-mode') || document.body.classList.contains('actions-mode')) { sizeEditor(); drawEditor(); } });
 
     function readForm() {
       return {
@@ -336,6 +374,8 @@
         status: el('status').checked,
         mode: el('mode').value,
         grow: el('grow').checked,
+        sb: el('sb').value.trim(),
+        sbtoken: el('sbtoken').value.trim(),
       };
     }
 
@@ -351,6 +391,8 @@
       el('status').checked = !!v.status;
       el('mode').value = v.mode || 'cluster';
       el('grow').checked = v.grow !== false; // Default: an
+      el('sb').value = v.sb || '';
+      el('sbtoken').value = v.sbtoken || '';
     }
 
     // Baut die Query-Parameter; `forStatus` erzwingt das Status-Badge in der Vorschau.
@@ -370,11 +412,19 @@
         const z = encodeZones(state.zones);
         if (z) p.set('zones', z);
       }
+      if (v.mode === 'actions') {
+        const z = encodeZones(state.zones);
+        if (z) p.set('zones', z);
+        const a = encodeActions(state.zones);
+        if (a) p.set('actions', a);
+        if (v.sb) p.set('sb', v.sb);
+        if (v.sbtoken) p.set('sbtoken', v.sbtoken);
+      }
       return p.toString();
     }
 
-    function overlayBase() {
-      return new URL('overlay.html', location.href).href;
+    function artifactBase(mode) {
+      return new URL(mode === 'actions' ? 'actions.html' : 'overlay.html', location.href).href;
     }
 
     function update() {
@@ -382,11 +432,13 @@
       localStorage.setItem(STORE_KEY, JSON.stringify({ ...v, zones: state.zones }));
       applyModeVisibility();
 
-      const obsUrl = overlayBase() + '?' + buildParams(v, false);
+      const base = artifactBase(v.mode);
+      const obsUrl = base + '?' + buildParams(v, false);
       el('obsUrl').value = obsUrl;
 
-      // Vorschau: Status erzwingen, damit man Modus/Verbindung sieht.
-      const previewUrl = overlayBase() + '?' + buildParams(v, true);
+      // Vorschau: Status erzwingen; im Aktions-Modus dry-run, damit nichts gesendet wird.
+      let previewUrl = base + '?' + buildParams(v, true);
+      if (v.mode === 'actions') previewUrl += '&dryrun=1';
       const iframe = el('preview');
       if (iframe.src !== previewUrl) iframe.src = previewUrl;
     }
@@ -404,12 +456,19 @@
     });
 
     function applyModeVisibility() {
-      const zones = el('mode').value === 'zones';
-      el('zonesFs').style.display = zones ? '' : 'none';
-      el('editorToolbar').style.display = zones ? 'flex' : 'none';
-      document.body.classList.toggle('zones-mode', zones);
+      const mode = el('mode').value;
+      const zonesLike = mode === 'zones' || mode === 'actions';
+      el('zonesFs').style.display = zonesLike ? '' : 'none';
+      el('sbFs').style.display = mode === 'actions' ? '' : 'none';
+      el('editorToolbar').style.display = zonesLike ? 'flex' : 'none';
+      // Cluster/Kreis-Felder im Aktions-Modus ausblenden
+      const clusterFs = el('threshold').closest('fieldset');
+      clusterFs.style.display = mode === 'actions' ? 'none' : '';
+      document.body.classList.toggle('zones-mode', mode === 'zones');
+      document.body.classList.toggle('actions-mode', mode === 'actions');
       applyRefVisibility();
-      if (zones) { sizeEditor(); drawEditor(); } // Umrisse über der Vorschau zeichnen
+      renderZoneList(); // Action-Felder je nach Modus ein-/ausblenden
+      if (zonesLike) { sizeEditor(); drawEditor(); }
     }
 
     // Referenzbild ist sichtbar, sobald eines geladen ist UND der Zonen-Modus aktiv ist —
@@ -417,7 +476,7 @@
     function applyRefVisibility() {
       const img = el('refImage');
       const has = !!img.getAttribute('src');
-      img.style.display = (has && el('mode').value === 'zones') ? 'block' : 'none';
+      img.style.display = (has && (el('mode').value === 'zones' || el('mode').value === 'actions')) ? 'block' : 'none';
       el('refClearBtn').style.display = has ? 'inline-block' : 'none';
     }
 
