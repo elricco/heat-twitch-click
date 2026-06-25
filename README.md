@@ -54,10 +54,14 @@ ist meist die Extension nicht aktiv oder es klickt gerade niemand – dann erst 
 
 ```
 index.html            Einstiegspunkt für GitHub Pages → leitet auf config.html weiter
-overlay.html          OBS-Overlay (transparent, vollflächiges Canvas)
+overlay.html          OBS-Overlay (transparent, vollflächiges Canvas, Cluster/Zonen)
+actions.html          Aktions-Bridge zu Streamer.Bot (unsichtbar, Status-Panel)
 config.html           Einstell-UI + Live-Vorschau + OBS-URL-Generator (merkt Werte in localStorage)
-js/heat-overlay.js    Logik: source / buffer / clusterer / renderer
-CLAUDE.md             Projektdoku
+js/heat-overlay.js    Rendering + Cluster-Logik
+js/heat-zones.js      Zonen-Geometrie (Point-in-Polygon, etc.)
+js/heat-core.js       Quellen (HeatSource, SimSource) + Buffer
+js/heat-actions.js    Aktions-Bridge (Trigger, Streamer.Bot WebSocket)
+CLAUDE.md             Projektdoku (Datenfluss, URL-Parameter)
 docs/superpowers/specs Design-Dokument
 ```
 
@@ -92,7 +96,28 @@ Clipboard-API nutzen soll (die braucht http/localhost).
 - Klick-Nachricht: `{ type: "click", x, y, id }` mit **x/y normalisiert (0..1)** → auflösungsunabhängig.
 - `id` = Twitch-User-ID, oder `A…` (anonym) / `U…` (Identität nicht geteilt). Im PoC ungenutzt.
 
-## Nicht im Scope (PoC)
+## Aktions-Zonen (Streamer.Bot)
 
-Nutzer-Identität, Aktions-Schicht (OBS-Steuerung, Webhooks, n8n), Persistenz, eigenes Relay.
-Das sind die nächsten Ausbauschritte.
+Ein dritter Overlay-Modus triggert **Streamer.Bot-Actions** aufgrund von Klick-Schwellen pro Zone:
+
+- **config.html** bietet einen dritten Modus „Aktions-Zonen (Streamer.Bot)":
+  - Zonen editieren wie im Zonen-Modus.
+  - Pro Zone: Action-Name + Schwellen angeben (`enter` = Klicks bis Trigger, `rearm` = zurücksetzen,
+    `cooldown` = Sperrzeit in Sekunden).
+- **actions.html** ist eine unsichtbare Browser-Quelle in OBS:
+  - Trägt die gleichen Zonen und Klick-Daten wie das Overlay.
+  - Evaluiert pro Zone: absolute Klickzahl im gleitenden Fenster → Trigger (Cooldown + Hysterese)
+    → DoAction-Request an Streamer.Bot WebSocket.
+  - Status-Panel zeigt Heat-Verbindung, Streamer.Bot-Status, Zone-Action-Badges und Trigger-Log.
+- **Streamer.Bot Verbindung:**
+  - WebSocket-URL (default `ws://127.0.0.1:8080/`) und optionales Auth-Token konfigurierbar.
+  - Sendet benannte Actions per Zone; Arguments: Zone-Index, Klickzahl, Anteil, Channel.
+  - SHA256×2-Auth unterstützt (falls aktiviert in Streamer.Bot).
+- **Hinweis Mixed-Content:** `actions.html` von HTTPS (GitHub Pages) zu `ws://127.0.0.1` kann
+  blockiert werden; dann `actions.html` lokal laden (`file://`) oder Streamer.Bot über `wss://`.
+- **Dry-Run (`?dryrun=1`):** testet Schwellen/Hysterese ohne an Streamer.Bot zu senden.
+
+**Nicht im Scope:**
+
+Nutzer-Identität, OBS-Steuerung, Webhooks, n8n-Integration, Persistenz, eigenes Relay.
+Das sind weitere Ausbauschritte.

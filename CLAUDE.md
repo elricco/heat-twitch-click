@@ -10,8 +10,13 @@ eines gleitenden Zeitfensters. Reiner Proof of Concept — nur Visualisierung.
 ```
 index.html            Einstiegspunkt für GitHub Pages. Meta-Refresh-Redirect auf config.html.
 overlay.html          OBS-Overlay (transparent, vollflächiges Canvas). Lädt js/heat-overlay.js.
+actions.html          Aktions-Bridge (unsichtbar, nur Status-Panel). Lädt js/heat-zones.js, 
+                      js/heat-core.js, js/heat-actions.js.
 config.html           Einstell-UI + Live-Vorschau (iframe) + OBS-URL-Generator. Kein Backend.
-js/heat-overlay.js    Gesamte Logik: source / buffer / clusterer / renderer + init().
+js/heat-overlay.js    Rendering + Cluster-Logik + init() für Cluster-/Zonen-Overlay.
+js/heat-zones.js      Reine Zonen-Geometrie: parseZones, pointInPolygon, centroid, tallyZones.
+js/heat-core.js       Quellen + Buffer: HeatSource (WebSocket), SimSource (Maus), createBuffer.
+js/heat-actions.js    Aktions-Bridge: evaluateZones, parseActions, buildDoAction, createSbClient.
 docs/superpowers/specs/  Design-Dokument(e).
 ```
 
@@ -25,23 +30,42 @@ Live: <https://elricco.github.io/heat-twitch-click/>. config.html baut die Overl
 
 ## Datenfluss
 
+### Overlay (cluster / zones)
+
 ```
 Source (HeatSource | SimSource) --onClick(x,y)--> Buffer (gleitendes Fenster)
-   pro Frame (requestAnimationFrame): Buffer.current() -> cluster() -> Renderer
+   pro Frame (requestAnimationFrame): Buffer.current() -> cluster() / tallyZones() -> Renderer
 ```
 
-Im Modus `zones` ersetzt `tallyZones(clicks, zones)` das Clustern: pro fester Zone
-(4-Punkt-Viereck) wird der Klick-Anteil im Fenster gezählt und via `createZoneRenderer`
-als Kreis am Zonen-Schwerpunkt gerendert (Umriss nur im Config-Editor). `cluster` bleibt
-der Default-Modus.
+Im Modus `cluster` (Default) clustert `cluster(...)` Klicks zu Hotspots; pro Frame
+wird der Renderer aktualisiert (weiche Animation).
 
-Die vier Bausteine in `js/heat-overlay.js` sind bewusst entkoppelt:
+Im Modus `zones` ersetzt `tallyZones(clicks, zones)` das Clustern: pro fester Zone
+(4-Punkt-Viereck) wird der Klick-Anteil im Fenster gezählt und als Kreis am Zonen-Schwerpunkt
+gerendert (Umrisse nur im Config-Editor). `js/heat-overlay.js` lädt `js/heat-zones.js`.
+
+### Actions-Bridge (Streamer.Bot)
+
+```
+Source (HeatSource | SimSource) --onClick(x,y)--> Buffer (gleitendes Fenster)
+   alle 250 ms: Buffer.current() -> tallyZones() -> evaluateZones()
+      -> Trigger (pro Zone: Cooldown + Hysterese) -> Streamer.Bot DoAction (über WebSocket)
+```
+
+`actions.html` (unsichtbar, nur Status-Panel) nutzt `js/heat-zones.js`, `js/heat-core.js` und
+`js/heat-actions.js`. Pro Zone wird die absolute Klickzahl im Fenster getrackt (kein Anteil);
+bei Schwellenwert (Cooldown + Hysterese) wird eine benannte Streamer.Bot-Action ausgelöst
+oder im Dry-Run-Modus nur geloggt.
+
+Die Bausteine sind bewusst entkoppelt:
 - **Source** — gemeinsames Interface `onClick(x, y)` (beide 0..1 normalisiert).
   `HeatSource` = echter WebSocket; `SimSource` = Mausklicks + optionale Auto-Klicks.
 - **createBuffer(windowMs)** — Ringpuffer, verwirft Klicks älter als das Fenster.
-- **cluster(...)** — Greedy-Radius-Merge → Top-N Cluster über Threshold, mit `share`.
-- **createRenderer(canvas)** — `track()` matcht Cluster per Nähe an bestehende Visuals,
-  `draw()` interpoliert Position/Anteil/Opacity weich (Ring + Prozent-Label).
+- **cluster(...)** — Greedy-Radius-Merge → Top-N Cluster über Threshold (nur Overlay).
+- **tallyZones(clicks, zones)** — zählt pro Zone die Klicks (Overlay + Bridge).
+- **evaluateZones(states, counts, now, cfg)** — Trigger-Maschine mit Cooldown/Hysterese (nur Bridge).
+- **createRenderer(canvas)** — `track()` / `draw()` mit weicher Interpolation (nur Overlay).
+- **createSbClient({ url, token, log, onStatus })** — Streamer.Bot WebSocket + Auth-Handshake (nur Bridge).
 
 ## Heat — verifizierte Fakten
 
@@ -71,14 +95,49 @@ Die vier Bausteine in `js/heat-overlay.js` sind bewusst entkoppelt:
 
 `config.html` generiert diese URL und merkt die zuletzt genutzten Werte in `localStorage`.
 
+## URL-Parameter (actions.html)
+
+`actions.html` (Aktions-Bridge zu Streamer.Bot) teilt die Quellen-Parameter mit `overlay.html`
+(`channel`, `sim`, `autoclicks`, `window`, `zones`) und hat zusätzlich:
+
+| Param        | Default | Bedeutung |
+|--------------|---------|-----------|
+| `sb`         | `ws://127.0.0.1:8080/` | Streamer.Bot WebSocket-URL. |
+| `sbtoken`    | —       | Auth-Token für Streamer.Bot (optional). |
+| `actions`    | —       | Pro Zone: `enter\|rearm\|cooldown\|<action>`, Zonen durch `;` getrennt. Beispiel: `20\|10\|60\|Link%20posten;15\|8\|45\|Discord` — Zone 1 triggert bei ≥20 Klicks, re-armed bei ≤10, Sperrzeit 60 Sek., Action-Name „Link posten". |
+| `dryrun`     | `0`     | `1` = evaluieren + loggen, aber nicht an Streamer.Bot senden (zum Testen der Schwellen). |
+
+**Codierung von `actions`:** `enter` = Klicks im gleitenden Fenster bis Auslösung (Ganzzahl),
+`rearm` = Klicks zum Zurücksetzen auf scharf (Ganzzahl, automatisch auf `max(0, enter-1)` wenn ungültig),
+`cooldown` = Sperrzeit nach Trigger in **Sekunden** (Ganzzahl), `action` = Streamer.Bot-Action-Name
+(mit `encodeURIComponent` codiert, z. B. `Link%20posten`). Ohne Action pro Zone: Zone wird übersprungen (skip).
+
 ## In OBS einbinden
 
-1. `config.html` öffnen, Channel-ID eintragen (oder Sim-Modus), Werte justieren, „Kopieren".
+### Cluster/Zonen-Overlay
+
+1. `config.html` öffnen, Modus „Cluster" oder „Zonen" wählen, Channel-ID eintragen (oder Sim-Modus),
+   Werte justieren, „Kopieren".
 2. In OBS: `+` → **Browser** → URL einfügen, Breite/Höhe = Stream-Auflösung (z. B. 1920×1080),
    Hintergrund transparent lassen.
 
+### Aktions-Zonen (Streamer.Bot)
+
+1. `config.html` öffnen, Modus „Aktions-Zonen (Streamer.Bot)" wählen.
+2. Zonen editieren (4 Punkte je Zone), pro Zone Action-Name + Schwellen (enter, rearm, cooldown)
+   eintragen.
+3. Streamer.Bot WebSocket-URL + optionales Auth-Token eingeben.
+4. „Kopieren" → die fertige `actions.html`-URL in OBS als **zweite, unsichtbare Browser-Quelle**
+   einfügen (oder als separate Window/Source je nach OBS-Setup). Status-Panel zeigt immer
+   Heat-Verbindung, Streamer.Bot-Status, Zone-Action-Badges und Trigger-Log.
+5. **Hinweis Mixed-Content:** `actions.html` über HTTPS (GitHub Pages) kann auf `ws://127.0.0.1`
+   (lokal) stoßen; moderne Browser blockieren das ggf. In OBS/CEF sollte es funktionieren, aber
+   falls nicht: entweder `actions.html` lokal laden (`file://`), oder Streamer.Bot über
+   `wss://` (TLS) erreichbar machen. Dry-Run (`?dryrun=1`) testet Schwellen ohne Versand.
+
 ## Bewusst NICHT im Scope (YAGNI)
 
-Identitäts-/`id`-Auswertung, Aktions-Schicht (OBS-Steuerung, Webhooks, n8n), Persistenz,
-eigenes Relay/Backend, Anti-Spam jenseits des Zeitfensters. Erweiterungen bitte erst nach
-kurzem Brainstorming/Design ergänzen.
+Identitäts-/`id`-Auswertung, OBS-Steuerung, Webhooks, n8n-Integration, Persistenz,
+eigenes Relay/Backend. Die Aktions-Schicht ist **teilweise** umgesetzt: Streamer.Bot-Trigger
+per Zone über die `actions.html`-Bridge funktioniert; OBS-Steuerung, Webhooks, n8n bleiben
+zukünftige Ausbauschritte. Erweiterungen bitte erst nach kurzem Brainstorming/Design ergänzen.

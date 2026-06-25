@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Heat — Aktions-Bridge</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0f1115; color: #e7eaf0;
+      font: 13px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+    .wrap { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .row { display: flex; gap: 10px; }
+    .badge { padding: 4px 9px; border-radius: 6px; background: #1f232c; }
+    .ok { color: #7CFC9A; } .warn { color: #ffb070; }
+    #log { background: #181b22; border-radius: 8px; padding: 8px; height: 60vh; overflow: auto;
+      font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .zone { color: #9aa3b2; } .skip { color: #ff7a6a; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row">
+      <span class="badge">Heat: <span id="heat">…</span></span>
+      <span class="badge">Streamer.Bot: <span id="sb">…</span></span>
+    </div>
+    <div id="zones"></div>
+    <div id="log"></div>
+  </div>
+  <script src="js/heat-zones.js"></script>
+  <script src="js/heat-core.js"></script>
+  <script src="js/heat-actions.js"></script>
+  <script>
+    const el = (id) => document.getElementById(id);
+    function line(html) {
+      const d = document.createElement('div'); d.innerHTML = html;
+      el('log').prepend(d);
+    }
+    window.HeatPanel = {
+      heat: (m) => { el('heat').textContent = m; },
+      sb: (s) => { el('sb').textContent = s; el('sb').className = /bereit|verbunden/.test(s) ? 'ok' : 'warn'; },
+      log: (m) => line('<span class="warn">' + m + '</span>'),
+      zones: (zones, actions) => {
+        el('zones').innerHTML = zones.map((z, i) => {
+          const a = actions[i];
+          return a && a.action
+            ? '<span class="badge zone">Zone ' + (i + 1) + ' → "' + a.action + '" (enter ' + a.enter + ')</span>'
+            : '<span class="badge skip">Zone ' + (i + 1) + ' → keine Action (skip)</span>';
+        }).join(' ');
+      },
+      fire: (n, action, count, dry) => line('<b>Zone ' + n + '</b> → "' + action + '" · ' + count + ' Klicks' + (dry ? ' <span class="zone">(dry-run, nicht gesendet)</span>' : '')),
+    };
+    HeatActions.init();
+  </script>
+</body>
+</html>
