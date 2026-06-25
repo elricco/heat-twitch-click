@@ -68,6 +68,14 @@
     .zone-row .state { font-size: 11.5px; color: var(--muted); }
     .zone-row button { padding: 6px 10px; font-size: 12px; }
     .zone-row.editing { outline: 1px solid var(--accent); border-radius: 6px; }
+    /* Aktions-Modus: Zeile wird zur Spalte (Kopf · Action-Name · Schwellen) */
+    .zone-row.actions { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 0; }
+    .zone-head { display: flex; align-items: center; gap: 8px; }
+    .zone-thresholds { display: flex; gap: 8px; }
+    .zone-thresholds .tcol { flex: 1; }
+    .zone-thresholds .tcol label { display: block; font-size: 11px; color: var(--muted); margin: 0 0 3px; text-transform: none; letter-spacing: 0; }
+    #actionsHint { display: none; }
+    body.actions-mode #actionsHint { display: block; }
 
     /* Vorschau */
     .preview { padding: 24px; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
@@ -171,6 +179,11 @@
 
     <fieldset id="zonesFs">
       <legend>Zonen</legend>
+      <div class="hint" id="actionsHint" style="margin-bottom:10px">
+        Pro Zone: <strong>Action-Name</strong> (genau wie in Streamer.Bot) + Schwellen.
+        „enter" = Klicks im Fenster bis zur Auslösung, „rearm" = darunter wird die Zone
+        wieder scharf, „cooldown" = Sperrzeit (Sek.) nach dem Feuern.
+      </div>
       <div id="zoneList"></div>
       <button type="button" class="secondary" id="addZoneBtn">+ Zone hinzufügen</button>
       <div class="hint" style="margin-top:8px">
@@ -188,7 +201,7 @@
         <label for="sbtoken">Auth-Token (optional)</label>
         <input type="text" id="sbtoken" placeholder="leer = keine Authentifizierung">
       </div>
-      <div class="hint">Pro Zone unten Action-Name + Schwellen setzen. „enter" = Klicks im Fenster bis Auslösung, „rearm" = darunter wird wieder scharf, „cooldown" = Sperrzeit (Sek.).</div>
+      <div class="hint">Token nur nötig, wenn der Streamer.Bot-WebSocket-Server Authentifizierung verlangt.</div>
     </fieldset>
 
     <fieldset>
@@ -231,6 +244,7 @@
     const round4 = (v) => Math.round(v * 1e4) / 1e4;
     let state = { zones: [] }; // zones: [{ points: [{x,y}, ...] }]  (0..4 Punkte)
     let editingIndex = null;   // von Task 6 genutzt
+    let lastMode = null;       // damit applyModeVisibility die Zonenliste nur bei echtem Moduswechsel neu baut
 
     function encodeActions(zones) {
       return zones.filter((z) => z.points.length === 4).map((z) =>
@@ -278,19 +292,37 @@
         if (el('mode').value === 'actions') {
           const z = state.zones[i];
           if (z.action === undefined) { z.action = ''; z.enter = 20; z.rearm = 10; z.cooldown = 60; }
-          const mk = (key, ph, w) => {
+          row.classList.add('actions');
+          const mk = (key) => {
             const inp = document.createElement('input');
             inp.type = key === 'action' ? 'text' : 'number';
-            inp.placeholder = ph; inp.value = z[key]; inp.style.width = w;
+            if (key !== 'action') inp.min = '0';
+            inp.value = z[key];
             inp.addEventListener('input', () => {
               z[key] = key === 'action' ? inp.value : Number(inp.value);
               update();
             });
             return inp;
           };
-          row.append(name, st, mk('action', 'Action-Name', '120px'),
-            mk('enter', 'enter', '64px'), mk('rearm', 'rearm', '64px'),
-            mk('cooldown', 'cd s', '56px'), edit, del);
+          // Zeile 1: Kopf (Name · Status · Editieren · Löschen)
+          const head = document.createElement('div');
+          head.className = 'zone-head';
+          head.append(name, st, edit, del);
+          // Zeile 2: Action-Name (volle Breite)
+          const actionInput = mk('action');
+          actionInput.placeholder = 'Action-Name (Streamer.Bot)';
+          // Zeile 3: enter · rearm · cooldown mit eigenen Labels
+          const thr = document.createElement('div');
+          thr.className = 'zone-thresholds';
+          [['enter', 'enter'], ['rearm', 'rearm'], ['cooldown', 'cooldown (s)']].forEach(([key, lbl]) => {
+            const col = document.createElement('div');
+            col.className = 'tcol';
+            const l = document.createElement('label');
+            l.textContent = lbl;
+            col.append(l, mk(key));
+            thr.appendChild(col);
+          });
+          row.append(head, actionInput, thr);
         } else {
           row.append(name, st, edit, del);
         }
@@ -345,6 +377,22 @@
             ectx.fill();
           }
         }
+        // Zonen-Label am Schwerpunkt (bzw. erstem Punkt), mit dunklem Umriss für Lesbarkeit.
+        let lx = 0, ly = 0;
+        for (const p of pts) { lx += p.x; ly += p.y; }
+        lx = (lx / pts.length) * editor.width;
+        ly = (ly / pts.length) * editor.height;
+        const label = 'Zone ' + (i + 1);
+        ectx.save();
+        ectx.font = '700 13px system-ui, -apple-system, Segoe UI, sans-serif';
+        ectx.textAlign = 'center';
+        ectx.textBaseline = 'middle';
+        ectx.lineWidth = 3;
+        ectx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ectx.fillStyle = '#fff';
+        ectx.strokeText(label, lx, ly);
+        ectx.fillText(label, lx, ly);
+        ectx.restore();
       });
     }
 
@@ -467,7 +515,10 @@
       document.body.classList.toggle('zones-mode', mode === 'zones');
       document.body.classList.toggle('actions-mode', mode === 'actions');
       applyRefVisibility();
-      renderZoneList(); // Action-Felder je nach Modus ein-/ausblenden
+      // Liste nur bei echtem Moduswechsel neu bauen — sonst verliert ein Zonen-Input
+      // bei jedem Tastendruck den Fokus (update() läuft pro Eingabe). Strukturelle
+      // Änderungen (Add/Delete/Edit) rufen renderZoneList() ohnehin selbst auf.
+      if (mode !== lastMode) { lastMode = mode; renderZoneList(); }
       if (zonesLike) { sizeEditor(); drawEditor(); }
     }
 
