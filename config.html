@@ -168,10 +168,6 @@
         </div>
       </div>
       <div class="field check">
-        <input type="checkbox" id="status">
-        <label for="status">Status-Badge im Overlay anzeigen</label>
-      </div>
-      <div class="field check">
         <input type="checkbox" id="grow" checked>
         <label for="grow">Kreise wachsen mit Anteil (sonst feste Größe, nur %)</label>
       </div>
@@ -206,6 +202,10 @@
 
     <fieldset>
       <legend>OBS-URL</legend>
+      <div class="field check" style="margin-bottom:12px">
+        <input type="checkbox" id="status">
+        <label for="status" id="statusLabel">Status-Badge anzeigen (Verbindung/Modus)</label>
+      </div>
       <div class="urlbox">
         <input type="text" id="obsUrl" readonly>
         <button type="button" id="copyBtn">Kopieren</button>

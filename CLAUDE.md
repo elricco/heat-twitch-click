@@ -10,7 +10,7 @@ eines gleitenden Zeitfensters. Reiner Proof of Concept — nur Visualisierung.
 ```
 index.html            Einstiegspunkt für GitHub Pages. Meta-Refresh-Redirect auf config.html.
 overlay.html          OBS-Overlay (transparent, vollflächiges Canvas). Lädt js/heat-overlay.js.
-actions.html          Aktions-Bridge (unsichtbar, nur Status-Panel). Lädt js/heat-zones.js, 
+actions.html          Aktions-Bridge (transparent/unsichtbar, optional kompakter Indikator). Lädt js/heat-zones.js, 
                       js/heat-core.js, js/heat-actions.js.
 config.html           Einstell-UI + Live-Vorschau (iframe) + OBS-URL-Generator. Kein Backend.
 js/heat-overlay.js    Rendering + Cluster-Logik + init() für Cluster-/Zonen-Overlay.
@@ -52,7 +52,7 @@ Source (HeatSource | SimSource) --onClick(x,y)--> Buffer (gleitendes Fenster)
       -> Trigger (pro Zone: Cooldown + Hysterese) -> Streamer.Bot DoAction (über WebSocket)
 ```
 
-`actions.html` (unsichtbar, nur Status-Panel) nutzt `js/heat-zones.js`, `js/heat-core.js` und
+`actions.html` (transparent/unsichtbar, optionaler Verbindungs-Indikator) nutzt `js/heat-zones.js`, `js/heat-core.js` und
 `js/heat-actions.js`. Pro Zone wird die absolute Klickzahl im Fenster getrackt (kein Anteil);
 bei Schwellenwert (Cooldown + Hysterese) wird eine benannte Streamer.Bot-Action ausgelöst
 oder im Dry-Run-Modus nur geloggt.
@@ -105,7 +105,14 @@ Die Bausteine sind bewusst entkoppelt:
 | `sb`         | `ws://127.0.0.1:8080/` | Streamer.Bot WebSocket-URL. |
 | `sbtoken`    | —       | Auth-Token für Streamer.Bot (optional). |
 | `actions`    | —       | Pro Zone: `enter\|rearm\|cooldown\|<action>`, Zonen durch `;` getrennt. Beispiel: `20\|10\|60\|Link%20posten;15\|8\|45\|Discord` — Zone 1 triggert bei ≥20 Klicks, re-armed bei ≤10, Sperrzeit 60 Sek., Action-Name „Link posten". |
-| `dryrun`     | `0`     | `1` = evaluieren + loggen, aber nicht an Streamer.Bot senden (zum Testen der Schwellen). |
+| `dryrun`     | `0`     | `1` = evaluieren + loggen + ausführliches Detail-Panel (Zonen + Trigger-Log) zeigen, aber nicht an Streamer.Bot senden (Config-Vorschau / Schwellen testen). |
+| `status`     | `0`     | `1` zeigt den kompakten Verbindungs-Indikator (Heat- + Streamer.Bot-Icon, farbcodiert). Default: nichts sichtbar → die Bridge ist als OBS-Quelle vollständig transparent. |
+
+**Sichtbarkeit:** `actions.html` hat einen transparenten Hintergrund und rendert standardmäßig
+nichts (unsichtbare OBS-Quelle). `status=1` blendet unten links einen kleinen, farbcodierten
+Verbindungs-Indikator ein (grün = bereit/verbunden, orange = getrennt/Reconnect, rot = Fehler/Auth,
+blau = Sim/Test). Das ausführliche Panel (Zonen + Trigger-Log) erscheint nur mit `dryrun=1` (so
+nutzt es die Config-Vorschau). Die Config-Checkbox „Status-Badge anzeigen" steuert `status`.
 
 **Codierung von `actions`:** `enter` = Klicks im gleitenden Fenster bis Auslösung (Ganzzahl),
 `rearm` = Klicks zum Zurücksetzen auf scharf (Ganzzahl, automatisch auf `max(0, enter-1)` wenn ungültig),
