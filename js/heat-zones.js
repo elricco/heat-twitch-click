@@ -47,7 +47,30 @@
     });
   }
 
-  const api = { parseZones, pointInPolygon, centroid, tallyZones };
+  // Farbskala Gelb (t=0, wenige Klicks) -> Rot (t=1, viele Klicks), stufenlos über Orange.
+  function scaleColor(t) {
+    const k = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0));
+    return { r: 255, g: Math.round(220 * (1 - k)), b: 0 };
+  }
+
+  // Hervorhebungs-Stufen je Bereich (Zone oder Cluster) mit { share }.
+  //   'color': nur der Spitzenreiter (share > 0, bei Gleichstand der erste) -> { alpha: 1, t: 1 }.
+  //   'scale': alle mit share > 0 -> { alpha: 1, t: share / maxShare } (relativ zum Spitzenreiter).
+  // Alles andere (und mode 'off') -> { alpha: 0, t: 0 }.
+  function highlightLevels(items, mode) {
+    const off = { alpha: 0, t: 0 };
+    if (mode !== 'color' && mode !== 'scale') return items.map(() => off);
+    let top = -1;
+    let max = 0;
+    items.forEach((it, i) => { if (it.share > max) { max = it.share; top = i; } });
+    return items.map((it, i) => {
+      if (top === -1 || it.share <= 0) return off;
+      if (mode === 'color') return i === top ? { alpha: 1, t: 1 } : off;
+      return { alpha: 1, t: it.share / max };
+    });
+  }
+
+  const api = { parseZones, pointInPolygon, centroid, tallyZones, scaleColor, highlightLevels };
   if (typeof window !== 'undefined') window.HeatZones = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

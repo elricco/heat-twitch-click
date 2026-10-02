@@ -5,6 +5,17 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 und das Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.3.0] - 2026-10-02
+
+Hervorhebung der meistgeklickten Bereiche.
+
+### Added
+
+- **Hervorhebung der meistgeklickten Bereiche** (`hl=color|scale`, `hlcolor`): „Farbe" füllt den
+  Bereich mit den meisten Klicks in einer wählbaren Farbe, „Skala" färbt alle geklickten Bereiche
+  stufenlos von Gelb nach Rot (relativ zum Spitzenreiter). Zonen-Modus: Zonenfläche mit
+  Prozentzahl statt Kreis, Cluster-Modus: eingefärbter Kreis. Config-UI mit Auswahl + Farbwähler; Tests für `scaleColor`/`highlightLevels`.
+
 ## [0.2.0] - 2026-06-25
 
 Aktions-Zonen: Heat-Klicks lösen Streamer.Bot-Actions aus.
@@ -75,5 +86,6 @@ Erster Release des Proof of Concept.
 - **Node-Test-Harness** (`test/heat-overlay.test.js`) für die reine Logik (parseZones,
   pointInPolygon, centroid, tallyZones).
 
+[0.3.0]: https://github.com/elricco/heat-twitch-click/releases/tag/v0.3.0
 [0.2.0]: https://github.com/elricco/heat-twitch-click/releases/tag/v0.2.0
 [0.1.0]: https://github.com/elricco/heat-twitch-click/releases/tag/v0.1.0

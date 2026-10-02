@@ -14,7 +14,7 @@ actions.html          Aktions-Bridge (transparent/unsichtbar, optional kompakter
                       js/heat-core.js, js/heat-actions.js.
 config.html           Einstell-UI + Live-Vorschau (iframe) + OBS-URL-Generator. Kein Backend.
 js/heat-overlay.js    Rendering + Cluster-Logik + init() für Cluster-/Zonen-Overlay.
-js/heat-zones.js      Reine Zonen-Geometrie: parseZones, pointInPolygon, centroid, tallyZones.
+js/heat-zones.js      Reine Zonen-Geometrie: parseZones, pointInPolygon, centroid, tallyZones; Hervorhebung: scaleColor, highlightLevels.
 js/heat-core.js       Quellen + Buffer: HeatSource (WebSocket), SimSource (Maus), createBuffer.
 js/heat-actions.js    Aktions-Bridge: evaluateZones, parseActions, buildDoAction, createSbClient.
 docs/superpowers/specs/  Design-Dokument(e).
@@ -92,6 +92,8 @@ Die Bausteine sind bewusst entkoppelt:
 | `mode`       | `cluster` | `zones` aktiviert feste Zonen statt Auto-Cluster. |
 | `zones`      | —       | Feste Vierecke `x1,y1,…,x4,y4`, Zonen per `;` getrennt (nur `mode=zones`). |
 | `grow`       | `1`     | `0` = feste Kreisgröße (nur Prozentzahl), Kreise wachsen nicht mit dem Anteil. |
+| `hl`         | `off`   | Hervorhebung der meistgeklickten Bereiche: `color` = nur der Spitzenreiter in `hlcolor`, `scale` = alle Bereiche mit Klicks von Gelb (wenig) bis Rot (viel), relativ zum Spitzenreiter. Zonen-Modus füllt die Zonenfläche (statt der Kreise nur die Prozentzahl), Cluster-Modus färbt den Kreis. |
+| `hlcolor`    | `ff3b30` | Hex-Farbe ohne `#` (nur `hl=color`). |
 
 `config.html` generiert diese URL und merkt die zuletzt genutzten Werte in `localStorage`.
 

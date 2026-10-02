@@ -80,6 +80,8 @@ docs/superpowers/specs Design-Dokument
 | `mode`       | `cluster` | `zones` = feste Zonen statt Auto-Cluster. |
 | `zones`      | —       | Feste Vierecke `x1,y1,…,x4,y4`, mehrere durch `;` (nur `mode=zones`). |
 | `grow`       | `1`     | `0` = feste Kreisgröße (nur Prozentzahl), Kreise wachsen nicht mit dem Anteil. |
+| `hl`         | `off`   | Hervorhebung der meistgeklickten Bereiche: `color` = nur der Spitzenreiter in `hlcolor`, `scale` = Verlauf Gelb → Rot (relativ zum Spitzenreiter). |
+| `hlcolor`    | `ff3b30` | Hex-Farbe ohne `#` (nur `hl=color`). |
 
 `config.html` baut diese URL für dich zusammen.
 

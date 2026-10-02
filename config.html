@@ -171,6 +171,19 @@
         <input type="checkbox" id="grow" checked>
         <label for="grow">Kreise wachsen mit Anteil (sonst feste Größe, nur %)</label>
       </div>
+      <div class="field">
+        <label for="hl">Hervorhebung (meiste Klicks)</label>
+        <select id="hl">
+          <option value="off">Aus</option>
+          <option value="color">Farbe (Spitzenreiter)</option>
+          <option value="scale">Skala (Gelb → Rot)</option>
+        </select>
+        <div class="hint">Zonen-Modus: die Zonenfläche wird gefüllt (statt Kreisen nur die Prozentzahl), im Cluster-Modus der Kreis. Skala = relativ zum Spitzenreiter.</div>
+      </div>
+      <div class="field" id="hlColorField">
+        <label for="hlcolor">Farbe</label>
+        <input type="color" id="hlcolor" value="#ff3b30">
+      </div>
     </fieldset>
 
     <fieldset id="zonesFs">
@@ -240,7 +253,7 @@
 
   <script>
     const STORE_KEY = 'heat-overlay-config';
-    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status', 'mode', 'grow', 'sb', 'sbtoken'];
+    const fields = ['channel', 'sim', 'autoclicks', 'window', 'threshold', 'maxCircles', 'mergeRadius', 'status', 'mode', 'grow', 'hl', 'hlcolor', 'sb', 'sbtoken'];
     const round4 = (v) => Math.round(v * 1e4) / 1e4;
     let state = { zones: [] }; // zones: [{ points: [{x,y}, ...] }]  (0..4 Punkte)
     let editingIndex = null;   // von Task 6 genutzt
@@ -422,6 +435,8 @@
         status: el('status').checked,
         mode: el('mode').value,
         grow: el('grow').checked,
+        hl: el('hl').value,
+        hlcolor: el('hlcolor').value,
         sb: el('sb').value.trim(),
         sbtoken: el('sbtoken').value.trim(),
       };
@@ -439,6 +454,8 @@
       el('status').checked = !!v.status;
       el('mode').value = v.mode || 'cluster';
       el('grow').checked = v.grow !== false; // Default: an
+      el('hl').value = v.hl || 'off';
+      el('hlcolor').value = v.hlcolor || '#ff3b30';
       el('sb').value = v.sb || '';
       el('sbtoken').value = v.sbtoken || '';
     }
@@ -455,6 +472,10 @@
       p.set('mergeRadius', v.mergeRadius);
       if (forceStatus || v.status) p.set('status', '1');
       if (v.grow === false) p.set('grow', '0');
+      if (v.hl === 'color' || v.hl === 'scale') {
+        p.set('hl', v.hl);
+        if (v.hl === 'color') p.set('hlcolor', String(v.hlcolor || '#ff3b30').replace('#', ''));
+      }
       if (v.mode === 'zones') {
         p.set('mode', 'zones');
         const z = encodeZones(state.zones);
@@ -512,6 +533,7 @@
       // Cluster/Kreis-Felder im Aktions-Modus ausblenden
       const clusterFs = el('threshold').closest('fieldset');
       clusterFs.style.display = mode === 'actions' ? 'none' : '';
+      el('hlColorField').style.display = el('hl').value === 'color' ? '' : 'none';
       document.body.classList.toggle('zones-mode', mode === 'zones');
       document.body.classList.toggle('actions-mode', mode === 'actions');
       applyRefVisibility();

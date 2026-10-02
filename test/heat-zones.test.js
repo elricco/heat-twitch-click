@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { parseZones, pointInPolygon, centroid, tallyZones } = require('../js/heat-zones.js');
+const { parseZones, pointInPolygon, centroid, tallyZones, scaleColor, highlightLevels } = require('../js/heat-zones.js');
 
 test('parseZones: leerer/fehlender Input ergibt []', () => {
   assert.deepStrictEqual(parseZones(''), []);
@@ -74,4 +74,31 @@ test('tallyZones: keine Klicks -> share 0, Zonen bleiben erhalten', () => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].count, 0);
   assert.strictEqual(out[0].share, 0);
+});
+
+test('scaleColor: Gelb bei 0, Rot bei 1, dazwischen Orange, Eingaben geklemmt', () => {
+  assert.deepStrictEqual(scaleColor(0), { r: 255, g: 220, b: 0 });
+  assert.deepStrictEqual(scaleColor(1), { r: 255, g: 0, b: 0 });
+  assert.strictEqual(scaleColor(0.5).g, 110);
+  assert.deepStrictEqual(scaleColor(2), scaleColor(1));
+  assert.deepStrictEqual(scaleColor(-1), scaleColor(0));
+  assert.deepStrictEqual(scaleColor(NaN), scaleColor(0));
+});
+
+test('highlightLevels: off/unbekannt -> nichts hervorgehoben', () => {
+  const items = [{ share: 0.6 }, { share: 0.4 }];
+  assert.ok(highlightLevels(items, 'off').every((l) => l.alpha === 0));
+  assert.ok(highlightLevels(items, 'x').every((l) => l.alpha === 0));
+});
+
+test('highlightLevels color: nur Spitzenreiter, Gleichstand -> erster, ohne Klicks nichts', () => {
+  const lv = highlightLevels([{ share: 0.3 }, { share: 0.5 }, { share: 0.5 }], 'color');
+  assert.deepStrictEqual(lv.map((l) => l.alpha), [0, 1, 0]);
+  assert.ok(highlightLevels([{ share: 0 }, { share: 0 }], 'color').every((l) => l.alpha === 0));
+  assert.deepStrictEqual(highlightLevels([], 'color'), []);
+});
+
+test('highlightLevels scale: relativ zum Spitzenreiter, Zonen ohne Klicks bleiben aus', () => {
+  const lv = highlightLevels([{ share: 0.5 }, { share: 0.25 }, { share: 0 }], 'scale');
+  assert.deepStrictEqual(lv, [{ alpha: 1, t: 1 }, { alpha: 1, t: 0.5 }, { alpha: 0, t: 0 }]);
 });
